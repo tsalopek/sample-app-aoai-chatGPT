@@ -3,11 +3,11 @@
         "data_paths": [
             {
                 "path": "data/source1",
-                "url_prefix": "https://<URL for source 1>.com/"
+                "url_prefix": "https://<URL for source 1>.us/"
             },
             {
                 "path": "data/source2",
-                "url_prefix": "https://<URL for source 2>.com/"
+                "url_prefix": "https://<URL for source 2>.us/"
             }
         ],
         "subscription_id": "<subscription id>",

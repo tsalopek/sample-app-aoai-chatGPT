@@ -164,7 +164,7 @@ class _AzureOpenAISettings(BaseSettings):
             return Self
         
         elif self.resource:
-            self.endpoint = f"https://{self.resource}.openai.azure.com"
+            self.endpoint = f"https://{self.resource}.openai.azure.us"
             return Self
         
         raise ValidationError("AZURE_OPENAI_ENDPOINT or AZURE_OPENAI_RESOURCE is required")

@@ -7,10 +7,10 @@ import urllib3
 def update_redirect_uris(credential, app_id, uri):
     urllib3.request(
         "PATCH",
-        f"https://graph.microsoft.com/v1.0/applications/{app_id}",
+        f"https://graph.microsoft.us/v1.0/applications/{app_id}",
         headers={
             "Authorization": "Bearer "
-            + credential.get_token("https://graph.microsoft.com/.default").token,
+            + credential.get_token("https://graph.microsoft.us/.default").token,
         },
         json={
             "web": {

@@ -762,7 +762,7 @@ def get_embedding(text, embedding_model_endpoint=None, embedding_model_key=None,
             deployment_id = endpoint_parts[1].split("/embeddings")[0]
             api_version = endpoint_parts[1].split("api-version=")[1].split("&")[0]
             if azure_credential is not None:
-                api_key = azure_credential.get_token("https://cognitiveservices.azure.com/.default").token
+                api_key = azure_credential.get_token("https://cognitiveservices.azure.us/.default").token
             else:
                 api_key = embedding_model_key if embedding_model_key else os.getenv("AZURE_OPENAI_API_KEY")
             

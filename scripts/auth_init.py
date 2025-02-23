@@ -8,14 +8,14 @@ import urllib3
 def get_auth_headers(credential):
     return {
         "Authorization": "Bearer "
-        + credential.get_token("https://graph.microsoft.com/.default").token
+        + credential.get_token("https://graph.microsoft.us/.default").token
     }
 
 
 def check_for_application(credential, app_id):
     resp = urllib3.request(
         "GET",
-        f"https://graph.microsoft.com/v1.0/applications/{app_id}",
+        f"https://graph.microsoft.us/v1.0/applications/{app_id}",
         headers=get_auth_headers(credential),
     )
     if resp.status != 200:
@@ -27,7 +27,7 @@ def check_for_application(credential, app_id):
 def create_application(credential):
     resp = urllib3.request(
         "POST",
-        "https://graph.microsoft.com/v1.0/applications",
+        "https://graph.microsoft.us/v1.0/applications",
         headers=get_auth_headers(credential),
         json={
             "displayName": "WebApp",
@@ -49,7 +49,7 @@ def create_application(credential):
 def add_client_secret(credential, app_id):
     resp = urllib3.request(
         "POST",
-        f"https://graph.microsoft.com/v1.0/applications/{app_id}/addPassword",
+        f"https://graph.microsoft.us/v1.0/applications/{app_id}/addPassword",
         headers=get_auth_headers(credential),
         json={"passwordCredential": {"displayName": "WebAppSecret"}},
         timeout=urllib3.Timeout(connect=10, read=10),

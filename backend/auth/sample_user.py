@@ -31,7 +31,7 @@ sample_user = {
   "X-Ms-Client-Principal": "your_base_64_encoded_token",
   "X-Ms-Client-Principal-Id": "00000000-0000-0000-0000-000000000000",
   "X-Ms-Client-Principal-Idp": "aad",
-  "X-Ms-Client-Principal-Name": "testusername@constoso.com",
+  "X-Ms-Client-Principal-Name": "testusername@constoso.us",
   "X-Ms-Token-Aad-Id-Token": "your_aad_id_token",
   "X-Original-Url": "/chatgpt",
   "X-Site-Deployment-Id": "your_app_service",

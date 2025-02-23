@@ -227,7 +227,7 @@ if __name__ == "__main__":
         endpoint=search_endpoint, credential=search_creds, index_name=args.index
     )
     form_recognizer_client = DocumentAnalysisClient(
-        endpoint=f"https://{args.formrecognizerservice}.cognitiveservices.azure.com/",
+        endpoint=f"https://{args.formrecognizerservice}.cognitiveservices.azure.us/",
         credential=formrecognizer_creds,
     )
     create_and_populate_index(

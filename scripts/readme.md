@@ -46,7 +46,7 @@ Each document can be associated with a URL that is stored with each document chu
 [
     {
         "data_path": "<local path or blob URL>",
-        "url_prefix": "https://<source website URL>.com/"
+        "url_prefix": "https://<source website URL>.us/"
         "location": "<azure region, e.g. 'westus2'>", 
         "subscription_id": "<subscription id>",
         "resource_group": "<resource group name>",
@@ -86,11 +86,11 @@ If you have documents from multiple source websites, you can specify multiple pa
         "data_paths": [
             {
                 "path": "data/source1",
-                "url_prefix": "https://<URL for source 1>.com/"
+                "url_prefix": "https://<URL for source 1>.us/"
             },
             {
                 "path": "data/source2",
-                "url_prefix": "https://<URL for source 2>.com/"
+                "url_prefix": "https://<URL for source 2>.us/"
             }
         ],
         "subscription_id": "<subscription id>",
@@ -121,7 +121,7 @@ Azure Cognitive Search supports vector search in public preview. See [the docs](
 
 To add vectors to your index, you will first need an [Azure OpenAI resource](https://learn.microsoft.com/en-us/azure/ai-services/openai/overview) with an [Ada embedding model deployment](https://learn.microsoft.com/en-us/azure/ai-services/openai/concepts/models#embeddings-models). The `text-embedding-ada-002` model is supported.
 
-- Get the endpoint for embedding model deployment. The endpoint will generally be of the format `https://<azure openai resource name>.openai.azure.com/openai/deployments/<ada deployment name>/embeddings?api-version=2023-06-01-preview`.
+- Get the endpoint for embedding model deployment. The endpoint will generally be of the format `https://<azure openai resource name>.openai.azure.us/openai/deployments/<ada deployment name>/embeddings?api-version=2023-06-01-preview`.
 - Run the data preparation script, passing in your config file and the embedding endpoint and key as extra arguments:
 
       `python data_preparation.py --config config.json --embedding-model-endpoint "<embedding endpoint>"`
@@ -168,9 +168,9 @@ If your documents have a lot of tables and relevant layout information, you can 
         "token_overlap": 128,
         "keyvault_url": "https://<keyvault name>.vault.azure.net/",
         "document_intelligence_secret_name": "myDocIntelligenceKey",
-        "document_intelligence_endpoint": "https://<document intelligence resource name>.cognitiveservices.azure.com/",
+        "document_intelligence_endpoint": "https://<document intelligence resource name>.cognitiveservices.azure.us/",
         "embedding_key_secret_name": "myAzureOpenAIKey",
-        "embedding_endpoint": "https:/<azure openai resource name>.openai.azure.com/openai/deployments/<Ada deployment name>/embeddings?api-version=2023-06-01-preview",
+        "embedding_endpoint": "https:/<azure openai resource name>.openai.azure.us/openai/deployments/<Ada deployment name>/embeddings?api-version=2023-06-01-preview",
         "index_name": "<new index name>",
         "search_service_name": "<search service name>",
         "search_key_secret_name": "mySearchServiceKey"

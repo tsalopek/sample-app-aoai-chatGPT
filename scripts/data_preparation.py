@@ -73,14 +73,14 @@ def check_if_search_service_exists(search_service_name: str,
     if credential is None:
         raise ValueError("credential cannot be None")
     url = (
-        f"https://management.azure.com/subscriptions/{subscription_id}"
+        f"https://management.azure.us/subscriptions/{subscription_id}"
         f"/resourceGroups/{resource_group}/providers/Microsoft.Search/searchServices"
         f"/{search_service_name}?api-version=2024-03-01-Preview"
     )
 
     headers = {
         "Content-Type": "application/json",
-        "Authorization": f"Bearer {credential.get_token('https://management.azure.com/.default').token}",
+        "Authorization": f"Bearer {credential.get_token('https://management.azure.us/.default').token}",
     }
 
     response = requests.get(url, headers=headers)
@@ -110,7 +110,7 @@ def create_search_service(
     if credential is None:
         raise ValueError("credential cannot be None")
     url = (
-        f"https://management.azure.com/subscriptions/{subscription_id}"
+        f"https://management.azure.us/subscriptions/{subscription_id}"
         f"/resourceGroups/{resource_group}/providers/Microsoft.Search/searchServices"
         f"/{search_service_name}?api-version=2024-03-01-Preview"
     )
@@ -128,7 +128,7 @@ def create_search_service(
 
     headers = {
         "Content-Type": "application/json",
-        "Authorization": f"Bearer {credential.get_token('https://management.azure.com/.default').token}",
+        "Authorization": f"Bearer {credential.get_token('https://management.azure.us/.default').token}",
     }
 
     response = requests.put(url, json=payload, headers=headers)
@@ -454,10 +454,10 @@ if __name__ == "__main__":
     parser.add_argument("--form-rec-key", type=str, help="Key for your Form Recognizer resource to use for PDF cracking.")
     parser.add_argument("--form-rec-use-layout", default=True, action='store_true', help="Whether to use Layout model for PDF cracking, if False will use Read model.")
     parser.add_argument("--njobs", type=valid_range, default=4, help="Number of jobs to run (between 1 and 32). Default=4")
-    parser.add_argument("--embedding-model-endpoint", type=str, help="Endpoint for the embedding model to use for vector search. Format: 'https://<AOAI resource name>.openai.azure.com/openai/deployments/<Ada deployment name>/embeddings?api-version=2024-03-01-Preview'")
+    parser.add_argument("--embedding-model-endpoint", type=str, help="Endpoint for the embedding model to use for vector search. Format: 'https://<AOAI resource name>.openai.azure.us/openai/deployments/<Ada deployment name>/embeddings?api-version=2024-03-01-Preview'")
     parser.add_argument("--embedding-model-key", type=str, help="Key for the embedding model to use for vector search.")
     parser.add_argument("--search-admin-key", type=str, help="Admin key for the search service. If not provided, will use Azure CLI to get the key.")
-    parser.add_argument("--azure-openai-endpoint", type=str, help="Endpoint for the (Azure) OpenAI API. Format: 'https://<AOAI resource name>.openai.azure.com/openai/deployments/<vision model name>/chat/completions?api-version=2024-04-01-preview'")
+    parser.add_argument("--azure-openai-endpoint", type=str, help="Endpoint for the (Azure) OpenAI API. Format: 'https://<AOAI resource name>.openai.azure.us/openai/deployments/<vision model name>/chat/completions?api-version=2024-04-01-preview'")
     parser.add_argument("--azure-openai-key", type=str, help="Key for the (Azure) OpenAI API.")
     args = parser.parse_args()
 
@@ -472,10 +472,10 @@ if __name__ == "__main__":
         os.environ["AZURE_SEARCH_ADMIN_KEY"] = args.search_admin_key
 
     if args.form_rec_resource and args.form_rec_key:
-        os.environ["FORM_RECOGNIZER_ENDPOINT"] = f"https://{args.form_rec_resource}.cognitiveservices.azure.com/"
+        os.environ["FORM_RECOGNIZER_ENDPOINT"] = f"https://{args.form_rec_resource}.cognitiveservices.azure.us/"
         os.environ["FORM_RECOGNIZER_KEY"] = args.form_rec_key
         if args.njobs==1:
-            form_recognizer_client = DocumentIntelligenceClient(endpoint=f"https://{args.form_rec_resource}.cognitiveservices.azure.com/", credential=AzureKeyCredential(args.form_rec_key))
+            form_recognizer_client = DocumentIntelligenceClient(endpoint=f"https://{args.form_rec_resource}.cognitiveservices.azure.us/", credential=AzureKeyCredential(args.form_rec_key))
         print(f"Using Form Recognizer resource {args.form_rec_resource} for PDF cracking, with the {'Layout' if args.form_rec_use_layout else 'Read'} model.")
 
     for index_config in config:

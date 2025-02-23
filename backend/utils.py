@@ -43,7 +43,7 @@ def fetchUserGroups(userToken, nextLink=None):
     if nextLink:
         endpoint = nextLink
     else:
-        endpoint = "https://graph.microsoft.com/v1.0/me/transitiveMemberOf?$select=id"
+        endpoint = "https://graph.microsoft.us/v1.0/me/transitiveMemberOf?$select=id"
 
     headers = {"Authorization": "bearer " + userToken}
     try:

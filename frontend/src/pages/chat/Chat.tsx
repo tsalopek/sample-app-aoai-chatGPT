@@ -768,7 +768,7 @@ const Chat = () => {
           <h1 className={styles.chatEmptyStateTitle}>Authentication Not Configured</h1>
           <h2 className={styles.chatEmptyStateSubtitle}>
             This app does not have authentication configured. Please add an identity provider by finding your app in the{' '}
-            <a href="https://portal.azure.com/" target="_blank">
+            <a href="https://portal.azure.us/" target="_blank">
               Azure Portal
             </a>
             and following{' '}
