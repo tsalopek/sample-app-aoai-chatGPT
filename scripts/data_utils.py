@@ -765,8 +765,10 @@ def get_embedding(text, embedding_model_endpoint=None, embedding_model_key=None,
                 api_key = azure_credential.get_token("https://cognitiveservices.azure.us/.default").token
             else:
                 api_key = embedding_model_key if embedding_model_key else os.getenv("AZURE_OPENAI_API_KEY")
-            
+
+            logging.debug(f"Setting up Azure OpenAI client with endpoint: {base_url}")
             client = AzureOpenAI(api_version=api_version, azure_endpoint=base_url, api_key=api_key)
+            logging.debug(f"Set up Azure OpenAI client with endpoint: {client}")
             if FLAG_AOAI == "V2":
                 embeddings = client.embeddings.create(model=deployment_id, input=text)
             elif FLAG_AOAI == "V3":   

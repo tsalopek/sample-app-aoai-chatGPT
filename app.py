@@ -159,6 +159,7 @@ async def init_openai_client():
         # Default Headers
         default_headers = {"x-ms-useragent": USER_AGENT}
 
+        logging.debug(f"Setting up Azure OpenAI client with endpoint: {endpoint}")
         azure_openai_client = AsyncAzureOpenAI(
             api_version=app_settings.azure_openai.preview_api_version,
             api_key=aoai_api_key,
@@ -166,7 +167,7 @@ async def init_openai_client():
             default_headers=default_headers,
             azure_endpoint=endpoint,
         )
-
+        logging.debug(f"Set up Azure OpenAI client with deployment: {deployment}")
         return azure_openai_client
     except Exception as e:
         logging.exception("Exception in Azure OpenAI initialization", e)
