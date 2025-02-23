@@ -250,7 +250,7 @@ class _AzureSearchSettings(BaseSettings, DatasourcePayloadConstructor):
     strictness: int = 3
     enable_in_domain: bool = Field(default=True, serialization_alias="in_scope")
     service: str = Field(exclude=True)
-    endpoint_suffix: str = Field(default="search.windows.us", exclude=True)
+    endpoint_suffix: str = Field(default="search.azure.us", exclude=True)
     index: str = Field(serialization_alias="index_name")
     key: Optional[str] = Field(default=None, exclude=True)
     use_semantic_search: bool = Field(default=False, exclude=True)

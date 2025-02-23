@@ -514,7 +514,7 @@ def extractStorageDetailsFromUrl(url):
 
 def downloadBlobUrlToLocalFolder(blob_url, local_folder, credential):
     (storage_account, container_name, path) = extractStorageDetailsFromUrl(blob_url)
-    container_url = f'https://{storage_account}.blob.core.windows.us/{container_name}'
+    container_url = f'https://{storage_account}.blob.core.azure.us/{container_name}'
     container_client = ContainerClient.from_container_url(container_url, credential=credential)
     if path and not path.endswith('/'):
         path = path + '/'
