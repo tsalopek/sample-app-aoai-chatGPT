@@ -159,7 +159,7 @@ def create_or_update_search_index(
             ).stdout
         )["primaryKey"]
 
-    url = f"https://{service_name}.search.windows.net/indexes/{index_name}?api-version=2024-03-01-Preview"
+    url = f"https://{service_name}.search.windows.us/indexes/{index_name}?api-version=2024-03-01-Preview"
     headers = {
         "Content-Type": "application/json",
         "api-key": admin_key,
@@ -294,7 +294,7 @@ def upload_documents_to_index(service_name, subscription_id, resource_group, ind
         to_upload_dicts.append(d)
         id += 1
     
-    endpoint = "https://{}.search.windows.net/".format(service_name)
+    endpoint = "https://{}.search.windows.us/".format(service_name)
     if not admin_key:
         admin_key = json.loads(
             subprocess.run(
@@ -338,7 +338,7 @@ def validate_index(service_name, subscription_id, resource_group, index_name):
         "Content-Type": "application/json", 
         "api-key": admin_key}
     params = {"api-version": api_version}
-    url = f"https://{service_name}.search.windows.net/indexes/{index_name}/stats"
+    url = f"https://{service_name}.search.windows.us/indexes/{index_name}/stats"
     for retry_count in range(5):
         response = requests.get(url, headers=headers, params=params)
 

@@ -103,7 +103,7 @@ Then, use these commands to deploy your local code to the existing app:
 
 Make sure that the app name and resource group match exactly for the app that was previously deployed.
 
-Deployment will take several minutes. When it completes, you should be able to navigate to your app at {app-name}.azurewebsites.net.
+Deployment will take several minutes. When it completes, you should be able to navigate to your app at {app-name}.azurewebsites.us.
 
 ## Authentication
 

@@ -221,7 +221,7 @@ if __name__ == "__main__":
 
     print("Data preparation script started")
     print("Preparing data for index:", args.index)
-    search_endpoint = f"https://{args.searchservice}.search.windows.net/"
+    search_endpoint = f"https://{args.searchservice}.search.windows.us/"
     index_client = SearchIndexClient(endpoint=search_endpoint, credential=search_creds)
     search_client = SearchClient(
         endpoint=search_endpoint, credential=search_creds, index_name=args.index

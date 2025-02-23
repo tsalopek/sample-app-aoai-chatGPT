@@ -1,7 +1,7 @@
 {
         "chunk_size": 1024,
         "token_overlap": 0,
-        "keyvault_url": "https://<keyvault name>.vault.azure.net/",
+        "keyvault_url": "https://<keyvault name>.vault.azure.us/",
         "document_intelligence_secret_name": "<secret name>",
         "document_intelligence_endpoint": "https://<resource name>.cognitiveservices.azure.us/",
         "embedding_key_secret_name": "<secret name>",

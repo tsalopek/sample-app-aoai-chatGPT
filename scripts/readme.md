@@ -27,7 +27,7 @@ Follow the instructions in this section to prepare your data locally. This is ea
 ]
 ```
 
-Note: `data_path` can be a path to files located locally on your machine, or an Azure Blob URL, e.g. of the format `"https://<storage account name>.blob.core.windows.net/<container name>/<path>/"`. If a blob URL is used, the data will first be downloaded from Blob Storage to a temporary directory on your machine before data preparation proceeds.
+Note: `data_path` can be a path to files located locally on your machine, or an Azure Blob URL, e.g. of the format `"https://<storage account name>.blob.core.windows.us/<container name>/<path>/"`. If a blob URL is used, the data will first be downloaded from Blob Storage to a temporary directory on your machine before data preparation proceeds.
 
 ## Create Indexes and Ingest Data
 Disclaimer: Make sure there are no duplicate pages in your data. That could impact the quality of the responses you get in a negative way.
@@ -166,7 +166,7 @@ If your documents have a lot of tables and relevant layout information, you can 
 {
         "chunk_size": 1024,
         "token_overlap": 128,
-        "keyvault_url": "https://<keyvault name>.vault.azure.net/",
+        "keyvault_url": "https://<keyvault name>.vault.azure.us/",
         "document_intelligence_secret_name": "myDocIntelligenceKey",
         "document_intelligence_endpoint": "https://<document intelligence resource name>.cognitiveservices.azure.us/",
         "embedding_key_secret_name": "myAzureOpenAIKey",

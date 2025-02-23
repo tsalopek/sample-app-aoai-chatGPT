@@ -48,7 +48,7 @@ def test_dotenv_with_azure_search_success(app_settings):
     payload = app_settings.datasource.construct_payload_configuration()
     assert payload["type"] == "azure_search"
     assert payload["parameters"] is not None
-    assert payload["parameters"]["endpoint"] == "https://search_service.search.windows.net"
+    assert payload["parameters"]["endpoint"] == "https://search_service.search.windows.us"
     print(payload)
 
 

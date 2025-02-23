@@ -11,7 +11,7 @@ VAULT_NAME = os.environ.get("VAULT_NAME")
 
 @pytest.fixture(scope="module")
 def secret_client() -> SecretClient: 
-    kv_uri = f"https://{VAULT_NAME}.vault.azure.net"
+    kv_uri = f"https://{VAULT_NAME}.vault.azure.us"
     print(f"init secret_client from kv_uri={kv_uri}")
     credential = AzureCliCredential(additionally_allowed_tenants="*")
     return SecretClient(vault_url=kv_uri, credential=credential)

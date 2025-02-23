@@ -26,7 +26,7 @@ def update_redirect_uris(credential, app_id, uri):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
         description="Add a redirect URI to a registered application",
-        epilog="Example: auth_update.py --appid 123 --uri https://abc.azureservices.net",
+        epilog="Example: auth_update.py --appid 123 --uri https://abc.azureservices.us",
     )
     parser.add_argument(
         "--appid",

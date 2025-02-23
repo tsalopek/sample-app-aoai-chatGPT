@@ -507,14 +507,14 @@ class ChunkingResult:
     skipped_chunks: int = 0
 
 def extractStorageDetailsFromUrl(url):
-    matches = re.fullmatch(r'https:\/\/([^\/.]*)\.blob\.core\.windows\.net\/([^\/]*)\/(.*)', url)
+    matches = re.fullmatch(r'https:\/\/([^\/.]*)\.blob\.core\.windows\.us\/([^\/]*)\/(.*)', url)
     if not matches:
         raise Exception(f"Not a valid blob storage URL: {url}")
     return (matches.group(1), matches.group(2), matches.group(3))
 
 def downloadBlobUrlToLocalFolder(blob_url, local_folder, credential):
     (storage_account, container_name, path) = extractStorageDetailsFromUrl(blob_url)
-    container_url = f'https://{storage_account}.blob.core.windows.net/{container_name}'
+    container_url = f'https://{storage_account}.blob.core.windows.us/{container_name}'
     container_client = ContainerClient.from_container_url(container_url, credential=credential)
     if path and not path.endswith('/'):
         path = path + '/'
