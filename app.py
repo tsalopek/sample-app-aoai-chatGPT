@@ -347,7 +347,7 @@ async def send_chat_request(request_body, request_headers):
 
     try:
         azure_openai_client = await init_openai_client()
-        raw_response = await azure_openai_client.chat.uspletions.with_raw_response.create(**model_args)
+        raw_response = await azure_openai_client.chat.completions.with_raw_response.create(**model_args)
         response = raw_response.parse()
         apim_request_id = raw_response.headers.get("apim-request-id") 
     except Exception as e:
@@ -871,7 +871,7 @@ async def generate_title(conversation_messages) -> str:
 
     try:
         azure_openai_client = await init_openai_client()
-        response = await azure_openai_client.chat.uspletions.create(
+        response = await azure_openai_client.chat.completions.create(
             model=app_settings.azure_openai.model, messages=messages, temperature=1, max_tokens=64
         )
 
