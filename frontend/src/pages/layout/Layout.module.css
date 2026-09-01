@@ -31,6 +31,15 @@
   color: #242424;
 }
 
+.buildNumber {
+  margin-left: 8px;
+  color: #616161;
+  font-family: Consolas, 'Courier New', monospace;
+  font-size: 11px;
+  line-height: 16px;
+  white-space: nowrap;
+}
+
 .headerIcon {
   height: 32px;
   width: auto;

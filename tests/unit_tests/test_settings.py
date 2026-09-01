@@ -34,6 +34,13 @@ def test_dotenv_no_datasource_1(app_settings):
         "max_completion_tokens": 1000,
         "reasoning_effort": "none",
     }
+    app_settings.azure_openai.deployed_model_name = "gpt-4.1"
+    app_settings.azure_openai.model = "gpt-5.1"
+    assert app_settings.azure_openai.is_reasoning_model is True
+    assert app_settings.azure_openai.get_chat_completion_parameters() == {
+        "max_completion_tokens": 1000,
+        "reasoning_effort": "none",
+    }
     
     
 def test_dotenv_invalid_azure_search_rejected(dotenv_path, monkeypatch):

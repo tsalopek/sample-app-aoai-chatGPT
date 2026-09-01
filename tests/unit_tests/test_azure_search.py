@@ -33,7 +33,12 @@ def make_search_settings(**overrides):
 def test_build_search_payload_for_vector_semantic_hybrid():
     settings = make_search_settings(filter="groups/any(g: g eq '123')")
 
-    payload = build_search_payload(settings, "benefits", [0.1, 0.2])
+    payload = build_search_payload(
+        settings,
+        "benefits",
+        [0.1, 0.2],
+        "groups/any(g: g eq '123')",
+    )
 
     assert payload["search"] == "benefits"
     assert payload["queryType"] == "semantic"
@@ -43,7 +48,7 @@ def test_build_search_payload_for_vector_semantic_hybrid():
             "kind": "vector",
             "vector": [0.1, 0.2],
             "fields": "contentVector",
-            "k": 5,
+            "k": 50,
         }
     ]
     assert payload["filter"] == "groups/any(g: g eq '123')"
@@ -178,6 +183,6 @@ async def test_retrieve_from_azure_search_creates_vector_with_embedding_deployme
             "kind": "vector",
             "vector": [0.25, 0.5, 0.75],
             "fields": "contentVector",
-            "k": 5,
+            "k": 50,
         }
     ]

@@ -82,6 +82,9 @@ const Layout = () => {
             <Link to="/" className={styles.headerTitleContainer}>
               <h1 className={styles.headerTitle}>{ui?.title}</h1>
             </Link>
+            <span className={styles.buildNumber} title={`Build ${__BUILD_ID__}`}>
+              {__BUILD_ID__}
+            </span>
           </Stack>
           <Stack horizontal tokens={{ childrenGap: 4 }} className={styles.shareButtonContainer}>
             {appStateContext?.state.isCosmosDBAvailable?.status !== CosmosDBStatus.NotConfigured && ui?.show_chat_history_button !== false && (

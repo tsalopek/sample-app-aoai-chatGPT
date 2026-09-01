@@ -178,7 +178,13 @@ class _AzureOpenAISettings(BaseSettings):
     @property
     def is_reasoning_model(self) -> bool:
         """Return whether the configured model uses the GPT-5.1 request contract."""
-        return self.deployed_model_name.lower() in GPT_5_1_MODEL_NAMES
+        # Some existing deployments retained an older MODEL_NAME setting during
+        # the migration. The deployment name is also a reliable signal when it
+        # is the standard GPT-5.1 deployment name.
+        return any(
+            configured_name.lower() in GPT_5_1_MODEL_NAMES
+            for configured_name in (self.deployed_model_name, self.model)
+        )
 
     def get_chat_completion_parameters(self, max_tokens: Optional[int] = None) -> dict:
         """Build generation parameters supported by the configured model family."""
