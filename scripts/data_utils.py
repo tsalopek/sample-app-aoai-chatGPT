@@ -752,7 +752,9 @@ def get_embedding(text, embedding_model_endpoint=None, embedding_model_key=None,
     FLAG_COHERE = os.getenv("FLAG_COHERE", "ENGLISH")
     FLAG_AOAI = os.getenv("FLAG_AOAI", "V3")
 
-    if azure_credential is None and (endpoint is None or key is None):
+    if azure_credential is None and (
+        endpoint is None or embedding_model_key is None
+    ):
         raise Exception("EMBEDDING_MODEL_ENDPOINT and EMBEDDING_MODEL_KEY are required for embedding")
 
     try:
@@ -761,13 +763,23 @@ def get_embedding(text, embedding_model_endpoint=None, embedding_model_key=None,
             base_url = endpoint_parts[0]
             deployment_id = endpoint_parts[1].split("/embeddings")[0]
             api_version = endpoint_parts[1].split("api-version=")[1].split("&")[0]
-            if azure_credential is not None:
-                api_key = azure_credential.get_token("https://cognitiveservices.azure.us/.default").token
-            else:
-                api_key = embedding_model_key if embedding_model_key else os.getenv("AZURE_OPENAI_API_KEY")
-
             logging.debug(f"Setting up Azure OpenAI client with endpoint: {base_url}")
-            client = AzureOpenAI(api_version=api_version, azure_endpoint=base_url, api_key=api_key)
+            if azure_credential is not None:
+                azure_ad_token = azure_credential.get_token(
+                    "https://cognitiveservices.azure.us/.default"
+                ).token
+                client = AzureOpenAI(
+                    api_version=api_version,
+                    azure_endpoint=base_url,
+                    azure_ad_token=azure_ad_token,
+                )
+            else:
+                api_key = embedding_model_key or os.getenv("AZURE_OPENAI_API_KEY")
+                client = AzureOpenAI(
+                    api_version=api_version,
+                    azure_endpoint=base_url,
+                    api_key=api_key,
+                )
             logging.debug(f"Set up Azure OpenAI client with endpoint: {client}")
             if FLAG_AOAI == "V2":
                 embeddings = client.embeddings.create(model=deployment_id, input=text)

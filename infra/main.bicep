@@ -18,7 +18,7 @@ param searchServiceResourceGroupName string = ''
 param searchServiceResourceGroupLocation string = location
 param searchServiceSkuName string = ''
 param searchIndexName string = 'gptkbindex'
-param searchUseSemanticSearch bool = false
+param searchUseSemanticSearch bool = true
 param searchSemanticSearchConfig string = 'default'
 param searchTopK int = 5
 param searchEnableInDomain bool = true
@@ -26,13 +26,37 @@ param searchContentColumns string = 'content'
 param searchFilenameColumn string = 'filepath'
 param searchTitleColumn string = 'title'
 param searchUrlColumn string = 'url'
+@allowed([
+  'simple'
+  'semantic'
+  'vector'
+  'vectorSimpleHybrid'
+  'vectorSemanticHybrid'
+])
+param searchQueryType string = 'vectorSemanticHybrid'
+param searchVectorColumns string = 'contentVector'
+param searchApiVersion string = '2024-07-01'
+param searchMaxDocumentChars int = 12000
+param searchVectorizationDimensions int = 1536
+@description('Populate a newly provisioned Search service with the sample data after deployment. Existing Search services are never modified.')
+param searchCreateIndex bool = true
 
 param openAiResourceName string = ''
 param openAiResourceGroupName string = ''
 param openAiResourceGroupLocation string = location
 param openAiSkuName string = ''
-param openAIModel string = 'turbo16k'
-param openAIModelName string = 'gpt-35-turbo-16k'
+param openAIModel string = 'gpt-5.1'
+param openAIModelName string = 'gpt-5.1'
+param openAIModelVersion string = '2025-11-13'
+param openAIModelDeploymentSkuName string = 'DataZoneStandard'
+@allowed([
+  'none'
+  'low'
+  'medium'
+  'high'
+])
+param openAIReasoningEffort string = 'none'
+param openAIPreviewApiVersion string = '2025-04-01-preview'
 param openAITemperature int = 0
 param openAITopP int = 1
 param openAIMaxTokens int = 1000
@@ -40,7 +64,9 @@ param openAIStopSequence string = ''
 param openAISystemMessage string = 'You are an AI assistant that helps people find information.'
 param openAIStream bool = true
 param embeddingDeploymentName string = 'embedding'
-param embeddingModelName string = 'text-embedding-ada-002'
+param embeddingModelName string = 'text-embedding-3-small'
+param embeddingModelVersion string = '1'
+param embeddingDeploymentSkuName string = 'DataZoneStandard'
 
 // Used by prepdocs.py: Form recognizer
 param formRecognizerServiceName string = ''
@@ -70,13 +96,21 @@ resource resourceGroup 'Microsoft.Resources/resourceGroups@2021-04-01' = {
   tags: tags
 }
 
-resource openAiResourceGroup 'Microsoft.Resources/resourceGroups@2021-04-01' existing = if (!empty(openAiResourceGroupName)) {
+resource openAiResourceGroup 'Microsoft.Resources/resourceGroups@2021-04-01' existing = {
   name: !empty(openAiResourceGroupName) ? openAiResourceGroupName : resourceGroup.name
 }
 
-resource searchServiceResourceGroup 'Microsoft.Resources/resourceGroups@2021-04-01' existing = if (!empty(searchServiceResourceGroupName)) {
+resource searchServiceResourceGroup 'Microsoft.Resources/resourceGroups@2021-04-01' existing = {
   name: !empty(searchServiceResourceGroupName) ? searchServiceResourceGroupName : resourceGroup.name
 }
+
+var useExistingOpenAi = !empty(openAiResourceName)
+var useExistingSearch = !empty(searchServiceName)
+var effectiveOpenAiName = useExistingOpenAi ? openAiResourceName : '${abbrs.cognitiveServicesAccounts}${resourceToken}'
+var effectiveSearchServiceName = useExistingSearch ? searchServiceName : 'gptkb-${resourceToken}'
+var effectiveOpenAiSkuName = !empty(openAiSkuName) ? openAiSkuName : 'S0'
+var effectiveSearchSkuName = !empty(searchServiceSkuName) ? searchServiceSkuName : 'standard'
+var shouldPrepareSearchIndex = searchCreateIndex && !useExistingSearch
 
 
 // Create an App Service Plan to group applications under the same payment plan and SKU
@@ -114,10 +148,12 @@ module backend 'core/host/appservice.bicep' = {
     authClientId: authClientId
     authIssuerUri: authIssuerUri
     appSettings: {
+      AZURE_AUTHORITY_HOST: 'https://login.microsoftonline.us'
       // search
+      DATASOURCE_TYPE: 'AzureCognitiveSearch'
       AZURE_SEARCH_INDEX: searchIndexName
-      AZURE_SEARCH_SERVICE: searchService.outputs.name
-      AZURE_SEARCH_KEY: searchService.outputs.adminKey
+      AZURE_SEARCH_SERVICE: effectiveSearchServiceName
+      AZURE_SEARCH_API_VERSION: searchApiVersion
       AZURE_SEARCH_USE_SEMANTIC_SEARCH: searchUseSemanticSearch
       AZURE_SEARCH_SEMANTIC_SEARCH_CONFIG: searchSemanticSearchConfig
       AZURE_SEARCH_TOP_K: searchTopK
@@ -126,11 +162,17 @@ module backend 'core/host/appservice.bicep' = {
       AZURE_SEARCH_FILENAME_COLUMN: searchFilenameColumn
       AZURE_SEARCH_TITLE_COLUMN: searchTitleColumn
       AZURE_SEARCH_URL_COLUMN: searchUrlColumn
+      AZURE_SEARCH_QUERY_TYPE: searchQueryType
+      AZURE_SEARCH_VECTOR_COLUMNS: searchVectorColumns
+      AZURE_SEARCH_MAX_DOCUMENT_CHARS: searchMaxDocumentChars
+      SEARCH_VECTORIZATION_DIMENSIONS: searchVectorizationDimensions
       // openai
-      AZURE_OPENAI_RESOURCE: openAi.outputs.name
+      AZURE_OPENAI_RESOURCE: effectiveOpenAiName
       AZURE_OPENAI_MODEL: openAIModel
       AZURE_OPENAI_MODEL_NAME: openAIModelName
-      AZURE_OPENAI_KEY: openAi.outputs.key
+      AZURE_OPENAI_REASONING_EFFORT: openAIReasoningEffort
+      AZURE_OPENAI_PREVIEW_API_VERSION: openAIPreviewApiVersion
+      AZURE_OPENAI_EMBEDDING_NAME: embeddingDeploymentName
       AZURE_OPENAI_TEMPERATURE: openAITemperature
       AZURE_OPENAI_TOP_P: openAITopP
       AZURE_OPENAI_MAX_TOKENS: openAIMaxTokens
@@ -142,15 +184,15 @@ module backend 'core/host/appservice.bicep' = {
 }
 
 
-module openAi 'core/ai/cognitiveservices.bicep' = {
+module openAi 'core/ai/cognitiveservices.bicep' = if (!useExistingOpenAi) {
   name: 'openai'
   scope: openAiResourceGroup
   params: {
-    name: !empty(openAiResourceName) ? openAiResourceName : '${abbrs.cognitiveServicesAccounts}${resourceToken}'
+    name: effectiveOpenAiName
     location: openAiResourceGroupLocation
     tags: tags
     sku: {
-      name: !empty(openAiSkuName) ? openAiSkuName : 'S0'
+      name: effectiveOpenAiSkuName
     }
     deployments: [
       {
@@ -158,8 +200,9 @@ module openAi 'core/ai/cognitiveservices.bicep' = {
         model: {
           format: 'OpenAI'
           name: openAIModelName
-          version: '0613'
+          version: openAIModelVersion
         }
+        skuName: openAIModelDeploymentSkuName
         capacity: 30
       }
       {
@@ -167,19 +210,20 @@ module openAi 'core/ai/cognitiveservices.bicep' = {
         model: {
           format: 'OpenAI'
           name: embeddingModelName
-          version: '2'
+          version: embeddingModelVersion
         }
+        skuName: embeddingDeploymentSkuName
         capacity: 30
       }
     ]
   }
 }
 
-module searchService 'core/search/search-services.bicep' = {
+module searchService 'core/search/search-services.bicep' = if (!useExistingSearch) {
   name: 'search-service'
   scope: searchServiceResourceGroup
   params: {
-    name: !empty(searchServiceName) ? searchServiceName : 'gptkb-${resourceToken}'
+    name: effectiveSearchServiceName
     location: searchServiceResourceGroupLocation
     tags: tags
     authOptions: {
@@ -188,7 +232,7 @@ module searchService 'core/search/search-services.bicep' = {
       }
     }
     sku: {
-      name: !empty(searchServiceSkuName) ? searchServiceSkuName : 'standard'
+      name: effectiveSearchSkuName
     }
     semanticSearch: 'free'
   }
@@ -270,7 +314,7 @@ module searchRoleBackend 'core/security/role.bicep' = {
 }
 
 // For doc prep
-module docPrepResources 'docprep.bicep' = {
+module docPrepResources 'docprep.bicep' = if (shouldPrepareSearchIndex) {
   name: 'docprep-resources${resourceToken}'
   params: {
     location: location
@@ -292,10 +336,9 @@ output BACKEND_URI string = backend.outputs.uri
 
 // search
 output AZURE_SEARCH_INDEX string = searchIndexName
-output AZURE_SEARCH_SERVICE string = searchService.outputs.name
+output AZURE_SEARCH_SERVICE string = effectiveSearchServiceName
 output AZURE_SEARCH_SERVICE_RESOURCE_GROUP string = searchServiceResourceGroup.name
-output AZURE_SEARCH_SKU_NAME string = searchService.outputs.skuName
-output AZURE_SEARCH_KEY string = searchService.outputs.adminKey
+output AZURE_SEARCH_SKU_NAME string = effectiveSearchSkuName
 output AZURE_SEARCH_USE_SEMANTIC_SEARCH bool = searchUseSemanticSearch
 output AZURE_SEARCH_SEMANTIC_SEARCH_CONFIG string = searchSemanticSearchConfig
 output AZURE_SEARCH_TOP_K int = searchTopK
@@ -304,16 +347,21 @@ output AZURE_SEARCH_CONTENT_COLUMNS string = searchContentColumns
 output AZURE_SEARCH_FILENAME_COLUMN string = searchFilenameColumn
 output AZURE_SEARCH_TITLE_COLUMN string = searchTitleColumn
 output AZURE_SEARCH_URL_COLUMN string = searchUrlColumn
+output AZURE_SEARCH_QUERY_TYPE string = searchQueryType
+output AZURE_SEARCH_VECTOR_COLUMNS string = searchVectorColumns
+output AZURE_SEARCH_API_VERSION string = searchApiVersion
+output SEARCH_VECTORIZATION_DIMENSIONS int = searchVectorizationDimensions
+output AZURE_SEARCH_CREATE_INDEX bool = shouldPrepareSearchIndex
 
 // openai
-output AZURE_OPENAI_RESOURCE string = openAi.outputs.name
+output AZURE_OPENAI_RESOURCE string = effectiveOpenAiName
 output AZURE_OPENAI_RESOURCE_GROUP string = openAiResourceGroup.name
-output AZURE_OPENAI_ENDPOINT string = openAi.outputs.endpoint
+output AZURE_OPENAI_ENDPOINT string = 'https://${effectiveOpenAiName}.openai.azure.us/'
 output AZURE_OPENAI_MODEL string = openAIModel
 output AZURE_OPENAI_MODEL_NAME string = openAIModelName
-output AZURE_OPENAI_SKU_NAME string = openAi.outputs.skuName
-output AZURE_OPENAI_KEY string = openAi.outputs.key
+output AZURE_OPENAI_SKU_NAME string = effectiveOpenAiSkuName
 output AZURE_OPENAI_EMBEDDING_NAME string = '${embeddingDeploymentName}'
+output AZURE_OPENAI_EMBEDDING_ENDPOINT string = 'https://${effectiveOpenAiName}.openai.azure.us/openai/deployments/${embeddingDeploymentName}/embeddings?api-version=${openAIPreviewApiVersion}'
 output AZURE_OPENAI_TEMPERATURE int = openAITemperature
 output AZURE_OPENAI_TOP_P int = openAITopP
 output AZURE_OPENAI_MAX_TOKENS int = openAIMaxTokens
@@ -322,9 +370,9 @@ output AZURE_OPENAI_SYSTEM_MESSAGE string = openAISystemMessage
 output AZURE_OPENAI_STREAM bool = openAIStream
 
 // Used by prepdocs.py:
-output AZURE_FORMRECOGNIZER_SERVICE string = docPrepResources.outputs.AZURE_FORMRECOGNIZER_SERVICE
-output AZURE_FORMRECOGNIZER_RESOURCE_GROUP string = docPrepResources.outputs.AZURE_FORMRECOGNIZER_RESOURCE_GROUP
-output AZURE_FORMRECOGNIZER_SKU_NAME string = docPrepResources.outputs.AZURE_FORMRECOGNIZER_SKU_NAME
+output AZURE_FORMRECOGNIZER_SERVICE string = shouldPrepareSearchIndex ? docPrepResources.outputs.AZURE_FORMRECOGNIZER_SERVICE : ''
+output AZURE_FORMRECOGNIZER_RESOURCE_GROUP string = shouldPrepareSearchIndex ? docPrepResources.outputs.AZURE_FORMRECOGNIZER_RESOURCE_GROUP : ''
+output AZURE_FORMRECOGNIZER_SKU_NAME string = shouldPrepareSearchIndex ? docPrepResources.outputs.AZURE_FORMRECOGNIZER_SKU_NAME : ''
 
 // cosmos
 output AZURE_COSMOSDB_ACCOUNT string = cosmos.outputs.accountName

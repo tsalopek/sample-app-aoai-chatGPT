@@ -1,4 +1,4 @@
-# (Preview) Sample Chat App with AOAI
+# (Preview) Sample Chat App with AOAI in Azure Government
 
 ## Deploying with the Azure Developer CLI
 
@@ -25,12 +25,20 @@ If you're not using one of those options for opening the project, then you'll ne
 
 ### Deploying from scratch:
 
+Select the Azure Government cloud before signing in:
+
+```powershell
+az cloud set --name AzureUSGovernment
+azd config set cloud.name AzureUSGovernment
+azd auth login
+```
+
 If you don't have any pre-existing Azure services (i.e. OpenAI or Cognitive Search service), then you can provision
 all resources from scratch by following these steps:
 
 1. Run `azd auth login` to login to your Azure account.
 1. Run `azd up` to provision Azure resources and deploy this sample to those resources. This also runs a script to build the search index based on files in the `./data` folder.
-    * For the target location, the regions that currently support the models used in this sample are **East US** or **South Central US**. For an up-to-date list of regions and models, check [here](https://learn.microsoft.com/en-us/azure/cognitive-services/openai/concepts/models)
+    * For the target location, GPT-5.1 is available through **Data Zone Standard** deployments in **US Gov Arizona** and **US Gov Virginia**. The template deploys model `gpt-5.1`, version `2025-11-13`, and `text-embedding-3-small`, version `1`, using the `DataZoneStandard` deployment SKU. Check [Azure Government model availability](https://learn.microsoft.com/en-us/azure/foundry/foundry-models/concepts/models-sold-directly-by-azure-gov) before provisioning.
 1. After the application has been successfully deployed you will see a URL printed to the console.  Click that URL to interact with the application in your browser.
     > NOTE: It may take a minute for the application to be fully deployed. If you see a "Python Developer" welcome screen, then wait a minute and refresh the page.
 
@@ -45,7 +53,7 @@ Run the following commands based on what you want to customize:
 * `azd env set AZURE_OPENAI_SKU_NAME {Name of OpenAI SKU}`. Defaults to 'S0'.
 * `azd env set AZURE_SEARCH_SERVICE {Name of existing Cognitive Search service}`
 * `azd env set AZURE_SEARCH_SERVICE_RESOURCE_GROUP {Name of existing resource group that Cognitive Search service is provisioned to}`
-* `azd env set AZURE_SEARCH_SKU_NAME {Name of Cognitive Search SKY}`. Defaults to 'standard'.
+* `azd env set AZURE_SEARCH_SKU_NAME {Name of Cognitive Search SKU}`. Defaults to 'standard'.
 * `azd env set AZURE_FORMRECOGNIZER_SERVICE {Name of existing Form Recognizer service}`. Used by prepdocs.py for text extraction from docs.
 * `azd env set AZURE_FORMRECOGNIZER_SERVICE_RESOURCE_GROUP {Name of existing resource group that Form Recognizer service is provisioned to}`.
 * `azd env set AZURE_FORMRECOGNIZER_SKU_NAME {Name of Form Recognizer SKU}`. Defaults to 'S0'.
@@ -69,5 +77,7 @@ If you change any of the Bicep files in the infra folder, then you should re-run
 3. Navigate to `http://127.0.0.1:5000` in your browser. The deployed code requires authentication, but the local app should allow access as long as it's access from `127.0.0.1`.
 
 ### Note
+
+The default deployment enables application-managed RAG with `DATASOURCE_TYPE=AzureCognitiveSearch`. Documents are embedded with `text-embedding-3-small`, indexed in Azure AI Search, retrieved with hybrid semantic/vector search, and supplied to GPT-5.1 with citation labels. This path does not use Azure OpenAI On Your Data.
 
 >Note: The PDF documents used in this demo contain information generated using a language model (Azure OpenAI Service). The information contained in these documents is only for demonstration purposes and does not reflect the opinions or beliefs of Microsoft. Microsoft makes no representations or warranties of any kind, express or implied, about the completeness, accuracy, reliability, suitability or availability with respect to the information contained in this document. All rights reserved to Microsoft.

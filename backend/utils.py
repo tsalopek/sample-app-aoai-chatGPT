@@ -47,7 +47,7 @@ def fetchUserGroups(userToken, nextLink=None):
 
     headers = {"Authorization": "bearer " + userToken}
     try:
-        r = requests.get(endpoint, headers=headers)
+        r = requests.get(endpoint, headers=headers, timeout=(5, 15))
         if r.status_code != 200:
             logging.error(f"Error fetching user groups: {r.status_code} {r.text}")
             return []
@@ -63,7 +63,7 @@ def fetchUserGroups(userToken, nextLink=None):
         return []
 
 
-def generateFilterString(userToken):
+def generateFilterString(userToken, permitted_groups_column=None):
     # Get list of groups user is a member of
     userGroups = fetchUserGroups(userToken)
 
@@ -72,10 +72,27 @@ def generateFilterString(userToken):
         logging.debug("No user groups found")
 
     group_ids = ", ".join([obj["id"] for obj in userGroups])
-    return f"{AZURE_SEARCH_PERMITTED_GROUPS_COLUMN}/any(g:search.in(g, '{group_ids}'))"
+    groups_column = (
+        permitted_groups_column or AZURE_SEARCH_PERMITTED_GROUPS_COLUMN
+    )
+    if not groups_column:
+        raise ValueError("A permitted-groups column is required to build the filter.")
+    return f"{groups_column}/any(g:search.in(g, '{group_ids}'))"
 
 
-def format_non_streaming_response(chatCompletion, history_metadata, apim_request_id):
+def _citation_message(citations):
+    return {
+        "role": "tool",
+        "content": json.dumps({"citations": citations, "intent": ""}),
+    }
+
+
+def format_non_streaming_response(
+    chatCompletion,
+    history_metadata,
+    apim_request_id,
+    citations=None,
+):
     response_obj = {
         "id": chatCompletion.id,
         "model": chatCompletion.model,
@@ -89,6 +106,10 @@ def format_non_streaming_response(chatCompletion, history_metadata, apim_request
     if len(chatCompletion.choices) > 0:
         message = chatCompletion.choices[0].message
         if message:
+            if citations is not None:
+                response_obj["choices"][0]["messages"].append(
+                    _citation_message(citations)
+                )
             if hasattr(message, "context"):
                 response_obj["choices"][0]["messages"].append(
                     {
@@ -105,6 +126,24 @@ def format_non_streaming_response(chatCompletion, history_metadata, apim_request
             return response_obj
 
     return {}
+
+
+def format_retrieval_response(
+    chatCompletionChunk,
+    history_metadata,
+    apim_request_id,
+    citations,
+):
+    """Format direct retrieval citations as the tool message expected by the UI."""
+    return {
+        "id": chatCompletionChunk.id,
+        "model": chatCompletionChunk.model,
+        "created": chatCompletionChunk.created,
+        "object": chatCompletionChunk.object,
+        "choices": [{"messages": [_citation_message(citations)]}],
+        "history_metadata": history_metadata,
+        "apim-request-id": apim_request_id,
+    }
 
 def format_stream_response(chatCompletionChunk, history_metadata, apim_request_id):
     response_obj = {
@@ -213,4 +252,3 @@ def comma_separated_string_to_list(s: str) -> List[str]:
     Split comma-separated values into a list.
     '''
     return s.strip().replace(' ', '').split(',')
-

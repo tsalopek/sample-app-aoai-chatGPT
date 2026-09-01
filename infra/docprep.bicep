@@ -17,15 +17,18 @@ resource resourceGroup 'Microsoft.Resources/resourceGroups@2021-04-01' existing 
   name: resourceGroupName
 }
 
-resource formRecognizerResourceGroup 'Microsoft.Resources/resourceGroups@2021-04-01' existing = if (!empty(formRecognizerResourceGroupName)) {
+resource formRecognizerResourceGroup 'Microsoft.Resources/resourceGroups@2021-04-01' existing = {
   name: !empty(formRecognizerResourceGroupName) ? formRecognizerResourceGroupName : resourceGroup.name
 }
 
-module formRecognizer 'core/ai/cognitiveservices.bicep' = {
+var useExistingFormRecognizer = !empty(formRecognizerServiceName)
+var effectiveFormRecognizerName = useExistingFormRecognizer ? formRecognizerServiceName : '${abbrs.cognitiveServicesFormRecognizer}${resourceToken}'
+
+module formRecognizer 'core/ai/cognitiveservices.bicep' = if (!useExistingFormRecognizer) {
   name: 'formrecognizer'
   scope: formRecognizerResourceGroup
   params: {
-    name: !empty(formRecognizerServiceName) ? formRecognizerServiceName : '${abbrs.cognitiveServicesFormRecognizer}${resourceToken}'
+    name: effectiveFormRecognizerName
     kind: 'FormRecognizer'
     location: formRecognizerResourceGroupLocation
     tags: tags
@@ -47,6 +50,6 @@ module formRecognizerRoleUser 'core/security/role.bicep' = {
 
 // Used by prepdocs
 // Form recognizer
-output AZURE_FORMRECOGNIZER_SERVICE string = formRecognizer.outputs.name
+output AZURE_FORMRECOGNIZER_SERVICE string = effectiveFormRecognizerName
 output AZURE_FORMRECOGNIZER_RESOURCE_GROUP string = formRecognizerResourceGroup.name
 output AZURE_FORMRECOGNIZER_SKU_NAME string = formRecognizerSkuName

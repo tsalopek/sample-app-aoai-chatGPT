@@ -1,7 +1,7 @@
-import copy
 import json
 import os
 import logging
+import re
 import uuid
 import httpx
 import asyncio
@@ -24,6 +24,7 @@ from azure.identity.aio import (
 from backend.auth.auth_utils import get_authenticated_user_details
 from backend.security.ms_defender_utils import get_msdefender_user_json
 from backend.history.cosmosdbservice import CosmosConversationClient
+from backend.azure_search import retrieve_from_azure_search
 from backend.settings import (
     app_settings,
     MINIMUM_SUPPORTED_AZURE_OPENAI_PREVIEW_API_VERSION
@@ -34,11 +35,13 @@ from backend.utils import (
     format_non_streaming_response,
     convert_to_pf_format,
     format_pf_non_streaming_response,
+    format_retrieval_response,
 )
 
 bp = Blueprint("routes", __name__, static_folder="static", template_folder="static")
 
 cosmos_db_ready = asyncio.Event()
+azure_credential = None
 
 
 def create_app():
@@ -55,6 +58,13 @@ def create_app():
             logging.exception("Failed to initialize CosmosDB client")
             app.cosmos_conversation_client = None
             raise e
+
+    @app.after_serving
+    async def close_clients():
+        global azure_credential
+        if azure_credential is not None:
+            await azure_credential.close()
+            azure_credential = None
     
     return app
 
@@ -112,6 +122,13 @@ MS_DEFENDER_ENABLED = os.environ.get("MS_DEFENDER_ENABLED", "true").lower() == "
 
 
 # Initialize Azure OpenAI Client
+def get_azure_credential():
+    global azure_credential
+    if azure_credential is None:
+        azure_credential = DefaultAzureCredential()
+    return azure_credential
+
+
 async def init_openai_client():
     azure_openai_client = None
     
@@ -145,11 +162,10 @@ async def init_openai_client():
         ad_token_provider = None
         if not aoai_api_key:
             logging.debug("No AZURE_OPENAI_KEY found, using Azure Entra ID auth")
-            async with DefaultAzureCredential() as credential:
-                ad_token_provider = get_bearer_token_provider(
-                    credential,
-                    "https://cognitiveservices.azure.us/.default"
-                )
+            ad_token_provider = get_bearer_token_provider(
+                get_azure_credential(),
+                "https://cognitiveservices.azure.us/.default"
+            )
 
         # Deployment
         deployment = app_settings.azure_openai.model
@@ -184,8 +200,7 @@ async def init_cosmosdb_client():
             )
 
             if not app_settings.chat_history.account_key:
-                async with DefaultAzureCredential() as cred:
-                    credential = cred
+                credential = get_azure_credential()
                     
             else:
                 credential = app_settings.chat_history.account_key
@@ -207,20 +222,32 @@ async def init_cosmosdb_client():
     return cosmos_conversation_client
 
 
-def prepare_model_args(request_body, request_headers):
+def prepare_model_args(request_body, request_headers, grounding_context=None):
     request_messages = request_body.get("messages", [])
     messages = []
-    if not app_settings.datasource:
+    uses_direct_azure_search = (
+        app_settings.base_settings.datasource_type == "AzureCognitiveSearch"
+    )
+    if not app_settings.datasource or uses_direct_azure_search:
+        system_message = app_settings.azure_openai.system_message
+        if grounding_context:
+            system_message = f"{system_message}\n\n{grounding_context}"
         messages = [
             {
                 "role": "system",
-                "content": app_settings.azure_openai.system_message
+                "content": system_message
             }
         ]
 
     for message in request_messages:
         if message:
-            if message["role"] == "assistant" and "context" in message:
+            if message.get("role") not in {"user", "assistant"}:
+                continue
+            if (
+                not uses_direct_azure_search
+                and message["role"] == "assistant"
+                and "context" in message
+            ):
                 context_obj = json.loads(message["context"])
                 messages.append(
                     {
@@ -230,10 +257,14 @@ def prepare_model_args(request_body, request_headers):
                     }
                 )
             else:
+                content = message["content"]
+                if uses_direct_azure_search and message["role"] == "assistant":
+                    if isinstance(content, str):
+                        content = re.sub(r"\[doc\d+\]", "", content)
                 messages.append(
                     {
                         "role": message["role"],
-                        "content": message["content"]
+                        "content": content
                     }
                 )
 
@@ -244,63 +275,61 @@ def prepare_model_args(request_body, request_headers):
         application_name = app_settings.ui.title
         user_json = get_msdefender_user_json(authenticated_user_details, request_headers, conversation_id, application_name)
 
+    generation_args = app_settings.azure_openai.get_chat_completion_parameters()
+    reasoning_effort = generation_args.pop("reasoning_effort", None)
+
     model_args = {
         "messages": messages,
-        "temperature": app_settings.azure_openai.temperature,
-        "max_tokens": app_settings.azure_openai.max_tokens,
-        "top_p": app_settings.azure_openai.top_p,
-        "stop": app_settings.azure_openai.stop_sequence,
         "stream": app_settings.azure_openai.stream,
         "model": app_settings.azure_openai.model,
-        "user": user_json
+        "user": user_json,
+        **generation_args,
     }
 
-    if app_settings.datasource:
-        model_args["extra_body"] = {
-            "data_sources": [
-                app_settings.datasource.construct_payload_configuration(
-                    request=request
-                )
-            ]
-        }
+    extra_body = {}
+    # openai 1.55.3 supports max_completion_tokens but predates the typed
+    # reasoning_effort argument, so send the Azure-supported field explicitly.
+    if reasoning_effort:
+        extra_body["reasoning_effort"] = reasoning_effort
 
-    model_args_clean = copy.deepcopy(model_args)
-    if model_args_clean.get("extra_body"):
-        secret_params = [
-            "key",
-            "connection_string",
-            "embedding_key",
-            "encoded_api_key",
-            "api_key",
+    if app_settings.datasource and not uses_direct_azure_search:
+        extra_body["data_sources"] = [
+            app_settings.datasource.construct_payload_configuration(
+                request=request
+            )
         ]
-        for secret_param in secret_params:
-            if model_args_clean["extra_body"]["data_sources"][0]["parameters"].get(
-                secret_param
-            ):
-                model_args_clean["extra_body"]["data_sources"][0]["parameters"][
-                    secret_param
-                ] = "*****"
-        authentication = model_args_clean["extra_body"]["data_sources"][0][
-            "parameters"
-        ].get("authentication", {})
-        for field in authentication:
-            if field in secret_params:
-                model_args_clean["extra_body"]["data_sources"][0]["parameters"][
-                    "authentication"
-                ][field] = "*****"
-        embeddingDependency = model_args_clean["extra_body"]["data_sources"][0][
-            "parameters"
-        ].get("embedding_dependency", {})
-        if "authentication" in embeddingDependency:
-            for field in embeddingDependency["authentication"]:
-                if field in secret_params:
-                    model_args_clean["extra_body"]["data_sources"][0]["parameters"][
-                        "embedding_dependency"
-                    ]["authentication"][field] = "*****"
 
-    logging.debug(f"REQUEST BODY: {json.dumps(model_args_clean, indent=4)}")
+    if extra_body:
+        model_args["extra_body"] = extra_body
+
+    logging.debug(
+        "Prepared Azure OpenAI request: model=%s messages=%s stream=%s "
+        "grounded=%s legacy_data_source=%s",
+        model_args["model"],
+        len(model_args["messages"]),
+        model_args["stream"],
+        bool(grounding_context),
+        bool(model_args.get("extra_body", {}).get("data_sources")),
+    )
 
     return model_args
+
+
+def get_latest_user_query(messages):
+    for message in reversed(messages):
+        if message.get("role") != "user":
+            continue
+        content = message.get("content", "")
+        if isinstance(content, str):
+            return content
+        if isinstance(content, list):
+            text_parts = [
+                part.get("text", "")
+                for part in content
+                if isinstance(part, dict) and part.get("type") == "text"
+            ]
+            return "\n".join(part for part in text_parts if part)
+    raise ValueError("A user message is required for Azure AI Search retrieval.")
 
 
 async def promptflow_request(request):
@@ -343,11 +372,27 @@ async def send_chat_request(request_body, request_headers):
         if message.get("role") != 'tool':
             filtered_messages.append(message)
             
-    request_body['messages'] = filtered_messages
-    model_args = prepare_model_args(request_body, request_headers)
+    request_body = {**request_body, "messages": filtered_messages}
 
     try:
         azure_openai_client = await init_openai_client()
+        retrieval_result = None
+        if app_settings.base_settings.datasource_type == "AzureCognitiveSearch":
+            retrieval_result = await retrieve_from_azure_search(
+                query=get_latest_user_query(filtered_messages),
+                search_settings=app_settings.datasource,
+                request_headers=request_headers,
+                openai_client=azure_openai_client,
+                azure_credential=get_azure_credential(),
+            )
+
+        model_args = prepare_model_args(
+            request_body,
+            request_headers,
+            grounding_context=(
+                retrieval_result.context if retrieval_result else None
+            ),
+        )
         raw_response = await azure_openai_client.chat.completions.with_raw_response.create(**model_args)
         response = raw_response.parse()
         apim_request_id = raw_response.headers.get("apim-request-id") 
@@ -355,7 +400,8 @@ async def send_chat_request(request_body, request_headers):
         logging.exception("Exception in send_chat_request")
         raise e
 
-    return response, apim_request_id
+    citations = retrieval_result.citations if retrieval_result else None
+    return response, apim_request_id, citations
 
 
 async def complete_chat_request(request_body, request_headers):
@@ -369,17 +415,37 @@ async def complete_chat_request(request_body, request_headers):
             app_settings.promptflow.citations_field_name
         )
     else:
-        response, apim_request_id = await send_chat_request(request_body, request_headers)
+        response, apim_request_id, citations = await send_chat_request(
+            request_body,
+            request_headers,
+        )
         history_metadata = request_body.get("history_metadata", {})
-        return format_non_streaming_response(response, history_metadata, apim_request_id)
+        return format_non_streaming_response(
+            response,
+            history_metadata,
+            apim_request_id,
+            citations,
+        )
 
 
 async def stream_chat_request(request_body, request_headers):
-    response, apim_request_id = await send_chat_request(request_body, request_headers)
+    response, apim_request_id, citations = await send_chat_request(
+        request_body,
+        request_headers,
+    )
     history_metadata = request_body.get("history_metadata", {})
     
     async def generate():
+        citations_sent = False
         async for completionChunk in response:
+            if citations is not None and not citations_sent:
+                yield format_retrieval_response(
+                    completionChunk,
+                    history_metadata,
+                    apim_request_id,
+                    citations,
+                )
+                citations_sent = True
             yield format_stream_response(completionChunk, history_metadata, apim_request_id)
 
     return generate()
@@ -872,8 +938,19 @@ async def generate_title(conversation_messages) -> str:
 
     try:
         azure_openai_client = await init_openai_client()
+        generation_args = app_settings.azure_openai.get_chat_completion_parameters(
+            max_tokens=64
+        )
+        reasoning_effort = generation_args.pop("reasoning_effort", None)
+        if reasoning_effort:
+            generation_args["extra_body"] = {
+                # Keep the small title token budget for visible output.
+                "reasoning_effort": "none"
+            }
         response = await azure_openai_client.chat.completions.create(
-            model=app_settings.azure_openai.model, messages=messages, temperature=1, max_tokens=64
+            model=app_settings.azure_openai.model,
+            messages=messages,
+            **generation_args,
         )
 
         title = response.choices[0].message.content

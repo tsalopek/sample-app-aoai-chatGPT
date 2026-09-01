@@ -16,9 +16,8 @@ from pydantic import (
 )
 from pydantic.alias_generators import to_snake
 from pydantic_settings import BaseSettings, SettingsConfigDict
-from typing import List, Literal, Optional
+from typing import List, Literal, Mapping, Optional
 from typing_extensions import Self
-from quart import Request
 from backend.utils import parse_multi_columns, generateFilterString
 
 DOTENV_PATH = os.environ.get(
@@ -31,6 +30,8 @@ DOTENV_PATH = os.environ.get(
     )
 )
 MINIMUM_SUPPORTED_AZURE_OPENAI_PREVIEW_API_VERSION = "2024-05-01-preview"
+DEFAULT_AZURE_OPENAI_API_VERSION = "2025-04-01-preview"
+GPT_5_1_MODEL_NAMES = {"gpt-5.1", "gpt-5.1-chat"}
 
 
 class _UiSettings(BaseSettings):
@@ -102,6 +103,10 @@ class _AzureOpenAISettings(BaseSettings):
     )
     
     model: str
+    deployed_model_name: str = Field(
+        default="gpt-5.1",
+        validation_alias="AZURE_OPENAI_MODEL_NAME"
+    )
     key: Optional[str] = None
     resource: Optional[str] = None
     endpoint: Optional[str] = None
@@ -118,8 +123,9 @@ class _AzureOpenAISettings(BaseSettings):
     logit_bias: Optional[dict] = None
     presence_penalty: Optional[confloat(ge=-2.0, le=2.0)] = 0.0
     frequency_penalty: Optional[confloat(ge=-2.0, le=2.0)] = 0.0
+    reasoning_effort: Literal["none", "low", "medium", "high"] = "none"
     system_message: str = "You are an AI assistant that helps people find information."
-    preview_api_version: str = MINIMUM_SUPPORTED_AZURE_OPENAI_PREVIEW_API_VERSION
+    preview_api_version: str = DEFAULT_AZURE_OPENAI_API_VERSION
     embedding_endpoint: Optional[str] = None
     embedding_key: Optional[str] = None
     embedding_name: Optional[str] = None
@@ -161,13 +167,35 @@ class _AzureOpenAISettings(BaseSettings):
     @model_validator(mode="after")
     def ensure_endpoint(self) -> Self:
         if self.endpoint:
-            return Self
+            return self
         
         elif self.resource:
             self.endpoint = f"https://{self.resource}.openai.azure.us"
-            return Self
+            return self
         
-        raise ValidationError("AZURE_OPENAI_ENDPOINT or AZURE_OPENAI_RESOURCE is required")
+        raise ValueError("AZURE_OPENAI_ENDPOINT or AZURE_OPENAI_RESOURCE is required")
+
+    @property
+    def is_reasoning_model(self) -> bool:
+        """Return whether the configured model uses the GPT-5.1 request contract."""
+        return self.deployed_model_name.lower() in GPT_5_1_MODEL_NAMES
+
+    def get_chat_completion_parameters(self, max_tokens: Optional[int] = None) -> dict:
+        """Build generation parameters supported by the configured model family."""
+        token_limit = max_tokens if max_tokens is not None else self.max_tokens
+
+        if self.is_reasoning_model:
+            return {
+                "max_completion_tokens": token_limit,
+                "reasoning_effort": self.reasoning_effort,
+            }
+
+        return {
+            "temperature": self.temperature,
+            "max_tokens": token_limit,
+            "top_p": self.top_p,
+            "stop": self.stop_sequence,
+        }
         
     def extract_embedding_dependency(self) -> Optional[dict]:
         if self.embedding_name:
@@ -255,7 +283,10 @@ class _AzureSearchSettings(BaseSettings, DatasourcePayloadConstructor):
     key: Optional[str] = Field(default=None, exclude=True)
     use_semantic_search: bool = Field(default=False, exclude=True)
     semantic_search_config: str = Field(default="", serialization_alias="semantic_configuration")
-    content_columns: Optional[List[str]] = Field(default=None, exclude=True)
+    content_columns: Optional[List[str]] = Field(
+        default_factory=lambda: ["content"],
+        exclude=True,
+    )
     vector_columns: Optional[List[str]] = Field(default=None, exclude=True)
     title_column: Optional[str] = Field(default=None, exclude=True)
     url_column: Optional[str] = Field(default=None, exclude=True)
@@ -270,13 +301,17 @@ class _AzureSearchSettings(BaseSettings, DatasourcePayloadConstructor):
         'vectorSemanticHybrid'
     ] = "simple"
     permitted_groups_column: Optional[str] = Field(default=None, exclude=True)
+    api_version: str = Field(default="2024-07-01", exclude=True)
+    max_document_chars: conint(ge=1000, le=100000) = Field(
+        default=12000,
+        exclude=True,
+    )
     
     # Constructed fields
     endpoint: Optional[str] = None
     authentication: Optional[dict] = None
     embedding_dependency: Optional[dict] = None
     fields_mapping: Optional[dict] = None
-    filter: Optional[str] = Field(default=None, exclude=True)
     
     @field_validator('content_columns', 'vector_columns', mode="before")
     @classmethod
@@ -314,35 +349,60 @@ class _AzureSearchSettings(BaseSettings, DatasourcePayloadConstructor):
     @model_validator(mode="after")
     def set_query_type(self) -> Self:
         self.query_type = to_snake(self.query_type)
+        return self
 
-    def _set_filter_string(self, request: Request) -> str:
+    @model_validator(mode="after")
+    def validate_query_configuration(self) -> Self:
+        if self.uses_semantic_search and not self.semantic_search_config:
+            raise ValueError(
+                "AZURE_SEARCH_SEMANTIC_SEARCH_CONFIG is required for semantic search."
+            )
+        if self.uses_vector_search and not self.vector_columns:
+            raise ValueError(
+                "AZURE_SEARCH_VECTOR_COLUMNS is required for vector search."
+            )
+        return self
+
+    @property
+    def uses_vector_search(self) -> bool:
+        return self.query_type in {
+            "vector",
+            "vector_simple_hybrid",
+            "vector_semantic_hybrid",
+        }
+
+    @property
+    def uses_semantic_search(self) -> bool:
+        return self.query_type in {"semantic", "vector_semantic_hybrid"}
+
+    def get_filter(self, request_headers: Mapping[str, str]) -> Optional[str]:
         if self.permitted_groups_column:
-            user_token = request.headers.get("X-MS-TOKEN-AAD-ACCESS-TOKEN", "")
+            user_token = request_headers.get("X-MS-TOKEN-AAD-ACCESS-TOKEN", "")
             logging.debug(f"USER TOKEN is {'present' if user_token else 'not present'}")
             if not user_token:
                 raise ValueError(
                     "Document-level access control is enabled, but user access token could not be fetched."
                 )
 
-            filter_string = generateFilterString(user_token)
-            logging.debug(f"FILTER: {filter_string}")
-            return filter_string
+            return generateFilterString(
+                user_token,
+                self.permitted_groups_column,
+            )
         
         return None
-            
+
     def construct_payload_configuration(
         self,
         *args,
         **kwargs
     ):
         request = kwargs.pop('request', None)
-        if request and self.permitted_groups_column:
-            self.filter = self._set_filter_string(request)
-            
         self.embedding_dependency = \
             self._settings.azure_openai.extract_embedding_dependency()
         parameters = self.model_dump(exclude_none=True, by_alias=True)
         parameters.update(self._settings.search.model_dump(exclude_none=True, by_alias=True))
+        if request and self.permitted_groups_column:
+            parameters["filter"] = self.get_filter(request.headers)
         
         return {
             "type": self._type,
@@ -823,12 +883,43 @@ class _AppSettings(BaseModel):
             else:
                 self.datasource = None
                 logging.warning("No datasource configuration found in the environment -- calls will be made to Azure OpenAI without grounding data.")
-                
+
+            if (
+                self.datasource
+                and self.azure_openai.is_reasoning_model
+                and self.base_settings.datasource_type != "AzureCognitiveSearch"
+            ):
+                raise ValueError(
+                    "GPT-5.1 is not supported by the Azure OpenAI On Your Data "
+                    "integration used for this datasource. Use AzureCognitiveSearch "
+                    "or remove DATASOURCE_TYPE."
+                )
+
+            if (
+                self.base_settings.datasource_type == "AzureCognitiveSearch"
+                and self.datasource.uses_vector_search
+                and not (
+                    self.azure_openai.embedding_name
+                    or self.azure_openai.embedding_endpoint
+                )
+            ):
+                raise ValueError(
+                    "Vector search requires AZURE_OPENAI_EMBEDDING_NAME or "
+                    "AZURE_OPENAI_EMBEDDING_ENDPOINT."
+                )
+
             return self
 
         except ValidationError as e:
+            if self.base_settings.datasource_type == "AzureCognitiveSearch":
+                raise ValueError(
+                    "Invalid Azure AI Search configuration. Check the "
+                    "AZURE_SEARCH_* settings."
+                ) from e
             logging.warning("No datasource configuration found in the environment -- calls will be made to Azure OpenAI without grounding data.")
             logging.warning(e.errors())
+            self.datasource = None
+            return self
 
 
 app_settings = _AppSettings()

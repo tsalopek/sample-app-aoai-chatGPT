@@ -62,7 +62,7 @@
             "type": "securestring",
             "defaultValue": "",
             "metadata": {
-                "description": "Azure Search Admin Key"
+                "description": "Azure Search Query Key"
             }
         },
         "AzureSearchUseSemanticSearch": {
@@ -95,7 +95,7 @@
         },
         "AzureSearchEnableInDomain": {
             "type": "bool",
-            "defaultValue": false,
+            "defaultValue": true,
             "metadata": {
                 "description": "Enable in domain"
             }
@@ -109,7 +109,7 @@
         },
         "AzureSearchFilenameColumn": {
             "type": "string",
-            "defaultValue": "filename",
+            "defaultValue": "filepath",
             "metadata": {
                 "description": "Filename column"
             }
@@ -136,15 +136,36 @@
         },
         "AzureOpenAIModel": {
             "type": "string",
+            "defaultValue": "gpt-5.1",
             "metadata": {
                 "description": "Azure OpenAI Model Deployment Name"
             }
         },
         "AzureOpenAIModelName": {
             "type": "string",
-            "defaultValue": "gpt-35-turbo",
+            "defaultValue": "gpt-5.1",
             "metadata": {
                 "description": "Azure OpenAI Model Name"
+            }
+        },
+        "AzureOpenAIReasoningEffort": {
+            "type": "string",
+            "defaultValue": "none",
+            "allowedValues": [
+                "none",
+                "low",
+                "medium",
+                "high"
+            ],
+            "metadata": {
+                "description": "GPT-5.1 reasoning effort"
+            }
+        },
+        "AzureOpenAIPreviewApiVersion": {
+            "type": "string",
+            "defaultValue": "2025-04-01-preview",
+            "metadata": {
+                "description": "Azure OpenAI data-plane API version"
             }
         },
         "AzureOpenAIKey": {
@@ -389,6 +410,14 @@
                 "siteConfig": {
                     "appSettings": [
                         {
+                            "name": "AZURE_AUTHORITY_HOST",
+                            "value": "https://login.microsoftonline.us"
+                        },
+                        {
+                            "name": "DATASOURCE_TYPE",
+                            "value": "[if(and(not(empty(parameters('AzureSearchService'))), not(empty(parameters('AzureSearchIndex')))), 'AzureCognitiveSearch', '')]"
+                        },
+                        {
                             "name": "APPINSIGHTS_INSTRUMENTATIONKEY",
                             "value": "[reference(resourceId('Microsoft.Insights/components', parameters('ApplicationInsightsName')), '2015-05-01').InstrumentationKey]"
                         },
@@ -399,6 +428,14 @@
                         {
                             "name": "AZURE_SEARCH_INDEX",
                             "value": "[parameters('AzureSearchIndex')]"
+                        },
+                        {
+                            "name": "AZURE_SEARCH_API_VERSION",
+                            "value": "2024-07-01"
+                        },
+                        {
+                            "name": "AZURE_SEARCH_MAX_DOCUMENT_CHARS",
+                            "value": "12000"
                         },
                         {
                             "name": "AZURE_SEARCH_KEY",
@@ -455,6 +492,14 @@
                         {
                             "name": "AZURE_OPENAI_MODEL_NAME",
                             "value": "[parameters('AzureOpenAIModelName')]"
+                        },
+                        {
+                            "name": "AZURE_OPENAI_REASONING_EFFORT",
+                            "value": "[parameters('AzureOpenAIReasoningEffort')]"
+                        },
+                        {
+                            "name": "AZURE_OPENAI_PREVIEW_API_VERSION",
+                            "value": "[parameters('AzureOpenAIPreviewApiVersion')]"
                         },
                         {
                             "name": "AZURE_OPENAI_TEMPERATURE",

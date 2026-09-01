@@ -20,7 +20,7 @@ from azure.search.documents.indexes.models import (
     HnswParameters
 )
 from azure.search.documents import SearchClient
-from azure.ai.formrecognizer import DocumentAnalysisClient
+from azure.ai.documentintelligence import DocumentIntelligenceClient
 
 
 from data_utils import chunk_directory
@@ -222,13 +222,21 @@ if __name__ == "__main__":
     print("Data preparation script started")
     print("Preparing data for index:", args.index)
     search_endpoint = f"https://{args.searchservice}.search.azure.us/"
-    index_client = SearchIndexClient(endpoint=search_endpoint, credential=search_creds)
-    search_client = SearchClient(
-        endpoint=search_endpoint, credential=search_creds, index_name=args.index
+    index_client = SearchIndexClient(
+        endpoint=search_endpoint,
+        credential=search_creds,
+        audience="https://search.azure.us",
     )
-    form_recognizer_client = DocumentAnalysisClient(
+    search_client = SearchClient(
+        endpoint=search_endpoint,
+        credential=search_creds,
+        index_name=args.index,
+        audience="https://search.azure.us",
+    )
+    form_recognizer_client = DocumentIntelligenceClient(
         endpoint=f"https://{args.formrecognizerservice}.cognitiveservices.azure.us/",
         credential=formrecognizer_creds,
+        credential_scopes=["https://cognitiveservices.azure.us/.default"],
     )
     create_and_populate_index(
         args.index, index_client, search_client, form_recognizer_client, azd_credential, args.embeddingendpoint

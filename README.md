@@ -3,14 +3,29 @@
 This repo contains sample code for a simple chat webapp that integrates with Azure OpenAI. Note: some portions of the app use preview APIs.
 
 ## Prerequisites
-- An existing Azure OpenAI resource and model deployment of a chat model (e.g. `gpt-35-turbo-16k`, `gpt-4`)
-- To use Azure OpenAI on your data, one of the following data sources:
-  - Azure AI Search Index
+- An Azure Government subscription and an Azure OpenAI `gpt-5.1` deployment (model version `2025-11-13`)
+- An Azure AI Search index for GPT-5.1 retrieval-augmented generation (RAG)
+- For legacy Azure OpenAI On Your Data configurations, one of the following additional data sources:
   - Azure CosmosDB Mongo vCore vector index
   - Elasticsearch index (preview)
   - Pinecone index (private preview)
   - Azure SQL Server (private preview)
   - Mongo DB (preview)
+
+### GPT-5.1 in Azure Government
+
+GPT-5.1 is available in `usgovarizona` and `usgovvirginia` as a **Data Zone Standard** deployment. The default infrastructure configuration uses deployment name `gpt-5.1`, model `gpt-5.1`, version `2025-11-13`, and SKU `DataZoneStandard`.
+
+This application supports GPT-5.1 for both basic chat and Azure AI Search grounding. When `DATASOURCE_TYPE=AzureCognitiveSearch`, the backend queries Azure AI Search directly, adds the retrieved documents to the GPT-5.1 prompt, and returns citations in the existing UI format. It does not use the deprecated Azure OpenAI On Your Data API.
+
+The other datasource types still use Azure OpenAI On Your Data. They cannot be combined with GPT-5.1 because Microsoft stopped onboarding new models to that service and plans to retire it on October 14, 2026.
+
+Before using Azure CLI or Azure Developer CLI commands, select the Azure Government cloud and sign in:
+
+```powershell
+az cloud set --name AzureUSGovernment
+az login
+```
 
 ## Configure the app
 
@@ -46,7 +61,7 @@ cat .env | jq -R '. | capture("(?<name>[A-Z_]+)=(?<value>.*)")' | jq -s '.[].slo
 Please see [README_azd.md](./README_azd.md) for detailed instructions.
 
 ### One click Azure deployment
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fmicrosoft%2Fsample-app-aoai-chatGPT%2Fmain%2Finfrastructure%2Fdeployment.json)
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Ftsalopek%2Fsample-app-aoai-chatGPT%2Fadding-gcch-support%2Finfrastructure%2Fdeployment.json)
 
 Click on the Deploy to Azure button and configure your settings in the Azure Portal as described in the [Environment variables](#environment-variables) section.
 
@@ -120,14 +135,12 @@ To add further access controls, update the logic in `getUserInfoList` in `fronte
 
 To enable Microsoft Entra ID for intra-service authentication:
 
-1. Enable managed identity on Azure OpenAI
-2. Configure AI search to allow access from Azure OpenAI
-   1. Enable Role Based Access control on the used AI search instance [(see documentation)](https://learn.microsoft.com/en-us/azure/search/search-security-enable-roles)
-   2. Assign `Search Index Data Reader` and `Search Service Contributor` to the identity of the Azure OpenAI instance
-3. Do not configure `AZURE_SEARCH_KEY` and `AZURE_OPENAI_KEY` to use Entra ID authentication.
-4. Configure the webapp identity
-   1. Enable managed identity in the app service that hosts the webapp
-   2. Go to the Azure OpenAI instance and assign the role `Cognitive Services OpenAI User` to the identity of the webapp
+1. Enable a system-assigned managed identity on the App Service that hosts the web app.
+2. Enable role-based access control on the Azure AI Search service [(see documentation)](https://learn.microsoft.com/en-us/azure/search/search-security-enable-roles), then assign `Search Index Data Reader` to the App Service identity.
+3. Assign `Cognitive Services OpenAI User` on the Azure OpenAI resource to the App Service identity.
+4. Omit both `AZURE_SEARCH_KEY` and `AZURE_OPENAI_KEY`. The app will request Azure Government tokens for `search.azure.us` and `cognitiveservices.azure.us`.
+
+The document-preparation identity needs the broader `Search Service Contributor` and `Search Index Data Contributor` roles because it creates the index and uploads documents. The deployed App Service only needs read access to the index.
 
 Note: RBAC assignments can take a few minutes before becoming effective.
 
@@ -140,30 +153,32 @@ Note: RBAC assignments can take a few minutes before becoming effective.
 
     | App Setting | Required? | Default Value | Note |
     | --- | --- | --- | ------------- |
+    |AZURE_AUTHORITY_HOST|No|https://login.microsoftonline.us|Azure Government authority used by `DefaultAzureCredential`.|
     |AZURE_OPENAI_RESOURCE| Only if `AZURE_OPENAI_ENDPOINT` is not set || The name of your Azure OpenAI resource (only one of AZURE_OPENAI_RESOURCE/AZURE_OPENAI_ENDPOINT is required)|
     |AZURE_OPENAI_ENDPOINT| Only if `AZURE_OPENAI_RESOURCE` is not set ||The endpoint of your Azure OpenAI resource (only one of AZURE_OPENAI_RESOURCE/AZURE_OPENAI_ENDPOINT is required)|
-    |AZURE_OPENAI_MODEL|Yes||The name of your model deployment|
+    |AZURE_OPENAI_MODEL|Yes|gpt-5.1|The deployment name (not the model ID) of your GPT-5.1 deployment|
+    |AZURE_OPENAI_MODEL_NAME|Yes|gpt-5.1|The deployed model ID. This selects the GPT-5.1-compatible request contract even when the deployment has a custom name.|
+    |AZURE_OPENAI_REASONING_EFFORT|No|none|GPT-5.1 reasoning effort: `none`, `low`, `medium`, or `high`.|
+    |AZURE_OPENAI_PREVIEW_API_VERSION|No|2025-04-01-preview|Azure OpenAI data-plane API version used by the client.|
     |AZURE_OPENAI_KEY|Optional if using Microsoft Entra ID -- see our documentation on the required resource setup for identity-based authentication.||One of the API keys of your Azure OpenAI resource|
-    |AZURE_OPENAI_TEMPERATURE|No|0|What sampling temperature to use, between 0 and 2. Higher values like 0.8 will make the output more random, while lower values like 0.2 will make it more focused and deterministic. A value of 0 is recommended when using your data.|
-    |AZURE_OPENAI_TOP_P|No|1.0|An alternative to sampling with temperature, called nucleus sampling, where the model considers the results of the tokens with top_p probability mass. We recommend setting this to 1.0 when using your data.|
-    |AZURE_OPENAI_MAX_TOKENS|No|1000|The maximum number of tokens allowed for the generated answer.|
-    |AZURE_OPENAI_STOP_SEQUENCE|No||Up to 4 sequences where the API will stop generating further tokens. Represent these as a string joined with "|", e.g. `"stop1|stop2|stop3"`|
+    |AZURE_OPENAI_TEMPERATURE|No|0|Used only by legacy non-reasoning models; omitted from GPT-5.1 requests.|
+    |AZURE_OPENAI_TOP_P|No|1.0|Used only by legacy non-reasoning models; omitted from GPT-5.1 requests.|
+    |AZURE_OPENAI_MAX_TOKENS|No|1000|Output limit. Sent as `max_completion_tokens` for GPT-5.1 and as `max_tokens` for legacy models.|
+    |AZURE_OPENAI_STOP_SEQUENCE|No||Used only by legacy non-reasoning models; omitted from GPT-5.1 requests.|
     |AZURE_OPENAI_SYSTEM_MESSAGE|No|You are an AI assistant that helps people find information.|A brief description of the role and tone the model should use|
     |AZURE_OPENAI_STREAM|No|True|Whether or not to use streaming for the response. Note: Setting this to true prevents the use of prompt flow.|
-    |AZURE_OPENAI_EMBEDDING_NAME|Only if using vector search using an Azure OpenAI embedding model||The name of your embedding model deployment if using vector search.
+    |AZURE_OPENAI_EMBEDDING_NAME|Only if using vector search using an Azure OpenAI embedding model|embedding|The deployment name of the embedding model used to create the vectors in the search index.|
 
     See the [documentation](https://learn.microsoft.com/en-us/azure/cognitive-services/openai/reference#example-response-2) for more information on these parameters.
 
 
-#### Chat with your data
+#### Chat with your data using Azure AI Search
 
-[More information about Azure OpenAI on your data](https://learn.microsoft.com/en-us/azure/cognitive-services/openai/concepts/use-your-data)
-
-#### Chat with your data using Azure Cognitive Search
+Azure AI Search uses application-managed RAG in this project. The backend queries the index, adds retrieved content to the GPT-5.1 prompt as untrusted reference data, and emits `[docN]` citations in the existing frontend format. This path does not use Azure OpenAI On Your Data.
 
 1. Update the `AZURE_OPENAI_*` environment variables as described in the [basic chat experience](#basic-chat-experience) above. 
 
-2. To connect to your data, you need to specify an Azure Cognitive Search index to use. You can [create this index yourself](https://learn.microsoft.com/en-us/azure/search/search-get-started-portal) or use the [Azure AI Studio](https://oai.azure.com/portal/chat) to create the index for you.
+2. Specify an existing Azure AI Search index, or use this project's document-preparation scripts to create and populate one.
 
 3. Configure data source settings as described in the table below.
 
@@ -172,24 +187,32 @@ Note: RBAC assignments can take a few minutes before becoming effective.
     |DATASOURCE_TYPE|Yes||Must be set to `AzureCognitiveSearch`|
     |AZURE_SEARCH_SERVICE|Yes||The name of your Azure AI Search resource|
     |AZURE_SEARCH_INDEX|Yes||The name of your Azure AI Search Index|
-    |AZURE_SEARCH_KEY|Optional if using Microsoft Entra ID -- see our documentation on the required resource setup for identity-based authentication.||An **admin key** for your Azure AI Search resource.|
-    |AZURE_SEARCH_USE_SEMANTIC_SEARCH|No|False|Whether or not to use semantic search|
-    |AZURE_SEARCH_QUERY_TYPE|No|simple|Query type: simple, semantic, vector, vectorSimpleHybrid, or vectorSemanticHybrid. Takes precedence over AZURE_SEARCH_USE_SEMANTIC_SEARCH|
-    |AZURE_SEARCH_SEMANTIC_SEARCH_CONFIG|No||The name of the semantic search configuration to use if using semantic search.|
+    |AZURE_SEARCH_KEY|Optional if using Microsoft Entra ID||A query key for your Azure AI Search resource. If omitted, the application managed identity must have the Search Index Data Reader role.|
+    |AZURE_SEARCH_API_VERSION|No|2024-07-01|Stable Azure AI Search data-plane API version used for document queries.|
+    |AZURE_SEARCH_QUERY_TYPE|No|simple|Query type: `simple`, `semantic`, `vector`, `vectorSimpleHybrid`, or `vectorSemanticHybrid`.|
+    |AZURE_SEARCH_SEMANTIC_SEARCH_CONFIG|Required for semantic query types|default|The semantic configuration defined on the index.|
     |AZURE_SEARCH_TOP_K|No|5|The number of documents to retrieve when querying your search index.|
     |AZURE_SEARCH_ENABLE_IN_DOMAIN|No|True|Limits responses to only queries relating to your data.|
-    |AZURE_SEARCH_STRICTNESS|No|3|Integer from 1 to 5 specifying the strictness for the model limiting responses to your data.|
-    |AZURE_SEARCH_CONTENT_COLUMNS|No||List of fields in your search index that contains the text content of your documents to use when formulating a bot response. Represent these as a string joined with "|", e.g. `"product_description|product_manual"`|
-    |AZURE_SEARCH_FILENAME_COLUMN|No|| Field from your search index that gives a unique identifier of the source of your data to display in the UI.|
-    |AZURE_SEARCH_TITLE_COLUMN|No||Field from your search index that gives a relevant title or header for your data content to display in the UI.|
-    |AZURE_SEARCH_URL_COLUMN|No||Field from your search index that contains a URL for the document, e.g. an Azure Blob Storage URI. This value is not currently used.|
-    |AZURE_SEARCH_VECTOR_COLUMNS|No||List of fields in your search index that contain vector embeddings of your documents to use when formulating a bot response. Represent these as a string joined with "|", e.g. `"product_description|product_manual"`|
+    |AZURE_SEARCH_CONTENT_COLUMNS|No|content|Fields containing text supplied to GPT-5.1. Join multiple fields with `|`.|
+    |AZURE_SEARCH_FILENAME_COLUMN|No|filepath|Field containing the source name displayed in the citation UI.|
+    |AZURE_SEARCH_TITLE_COLUMN|No|title|Field containing the citation title.|
+    |AZURE_SEARCH_URL_COLUMN|No|url|Field containing the citation URL.|
+    |AZURE_SEARCH_VECTOR_COLUMNS|Required for vector query types|contentVector|Vector fields to search. Join multiple fields with `|`.|
     |AZURE_SEARCH_PERMITTED_GROUPS_COLUMN|No||Field from your Azure AI Search index that contains AAD group IDs that determine document-level access control.|
+    |AZURE_SEARCH_MAX_DOCUMENT_CHARS|No|12000|Maximum characters included from each retrieved document in the GPT-5.1 grounding prompt.|
 
     When using your own data with a vector index, ensure these settings are configured on your app:
     - `AZURE_SEARCH_QUERY_TYPE`: can be `vector`, `vectorSimpleHybrid`, or `vectorSemanticHybrid`,
-    - `AZURE_OPENAI_EMBEDDING_NAME`: the name of your Ada (text-embedding-ada-002) model deployment on your Azure OpenAI resource.
+    - `AZURE_OPENAI_EMBEDDING_NAME`: the name of your embedding model deployment (for example, `text-embedding-3-small`) on your Azure OpenAI resource.
     - `AZURE_SEARCH_VECTOR_COLUMNS`: the vector columns in your index to use when searching. Join them with `|` like `contentVector|titleVector`.
+
+    The query embedding model must be the same model used to create the vectors in the index. If you change embedding models, regenerate the document embeddings and rebuild the index.
+
+    For an existing custom index, every configured content/title/filepath/URL field must be retrievable. Content fields must also be searchable for text and hybrid queries. Vector fields must use the same dimensions as the configured embedding model (`1536` for this project's `text-embedding-3-small` default).
+
+#### Other legacy data sources
+
+The datasource sections below still use Azure OpenAI On Your Data. They require a model supported by that service and cannot be used with GPT-5.1. Azure AI Search is the GPT-5.1-compatible grounding path in this repository.
 
 #### Chat with your data using Azure Cosmos DB
 
@@ -216,7 +239,7 @@ Note: RBAC assignments can take a few minutes before becoming effective.
     |AZURE_COSMOSDB_MONGO_VCORE_VECTOR_COLUMNS|No||List of fields in your search index that contain vector embeddings of your documents to use when formulating a bot response. Represent these as a string joined with "|", e.g. `"product_description|product_manual"`|
 
     Azure Cosmos DB uses vector search by default, so ensure these settings are configured on your app:
-    - `AZURE_OPENAI_EMBEDDING_NAME`: the name of your Ada (text-embedding-ada-002) model deployment on your Azure OpenAI resource.
+    - `AZURE_OPENAI_EMBEDDING_NAME`: the name of your embedding model deployment (for example, `text-embedding-3-small`) on your Azure OpenAI resource.
     - `AZURE_COSMOSDB_MONGO_VCORE_VECTOR_COLUMNS`: the vector columns in your index to use when searching. Join them with `|` like `contentVector|titleVector`.
 
 #### Chat with your data using Elasticsearch (Preview)
@@ -247,7 +270,7 @@ Note: RBAC assignments can take a few minutes before becoming effective.
     To use vector search with Elasticsearch, there are two options:
 
     1. To use Azure OpenAI embeddings, ensure that your index contains Azure OpenAI embeddings, and that the following variables are set:
-    - `AZURE_OPENAI_EMBEDDING_NAME`: the name of your Ada (text-embedding-ada-002) model deployment on your Azure OpenAI resource, which was also used to create the embeddings in your index.
+    - `AZURE_OPENAI_EMBEDDING_NAME`: the name of your embedding model deployment (for example, `text-embedding-3-small`) on your Azure OpenAI resource, which was also used to create the embeddings in your index.
     - `ELASTICSEARCH_VECTOR_COLUMNS`: the vector columns in your index to use when searching. Join them with `|` like `contentVector|titleVector`.
 
     2. Use Elasticsearch embeddings, ensure that your index contains embeddings produced from a trained model on your Elasticsearch cluster, and that the following variables are set:
@@ -278,7 +301,7 @@ Note: RBAC assignments can take a few minutes before becoming effective.
     |PINECONE_VECTOR_COLUMNS|No||List of fields in your search index that contain vector embeddings of your documents to use when formulating a bot response. Represent these as a string joined with "|", e.g. `"product_description|product_manual"`|
 
     Pinecone uses vector search by default, so ensure these settings are configured on your app:
-    - `AZURE_OPENAI_EMBEDDING_NAME`: the name of your Ada (text-embedding-ada-002) model deployment on your Azure OpenAI resource.
+    - `AZURE_OPENAI_EMBEDDING_NAME`: the name of your embedding model deployment (for example, `text-embedding-3-small`) on your Azure OpenAI resource.
     - `PINECONE_VECTOR_COLUMNS`: the vector columns in your index to use when searching. Join them with `|` like `contentVector|titleVector`.
 
 #### Chat with your data using Mongo DB (Private Preview)
@@ -306,7 +329,7 @@ Note: RBAC assignments can take a few minutes before becoming effective.
     |MONGODB_VECTOR_COLUMNS|No||List of fields in your search index that contain vector embeddings of your documents to use when formulating a bot response. Represent these as a string joined with "|", e.g. `"product_description|product_manual"`|
 
     MongoDB uses vector search by default, so ensure these settings are configured on your app:
-    - `AZURE_OPENAI_EMBEDDING_NAME`: the name of your Ada (text-embedding-ada-002) model deployment on your Azure OpenAI resource.
+    - `AZURE_OPENAI_EMBEDDING_NAME`: the name of your embedding model deployment (for example, `text-embedding-3-small`) on your Azure OpenAI resource.
     - `MONGODB_VECTOR_COLUMNS`: the vector columns in your index to use when searching. Join them with `|` like `contentVector|titleVector`.
     
 #### Chat with your data using Azure SQL Server (Private Preview)
@@ -392,7 +415,7 @@ Next, enable logging on the app service. Go to "App Service logs" under Monitori
 Now, you should be able to see logs from your app by viewing "Log stream" under Monitoring.
 
 ### Changing Citation Display
-The Citation panel is defined at the end of `frontend/src/pages/chat/Chat.tsx`. The citations returned from Azure OpenAI On Your Data will include `content`, `title`, `filepath`, and in some cases `url`. You can customize the Citation section to use and display these as you like. For example, the title element is a clickable hyperlink if `url` is not a blob URL.
+The Citation panel is defined at the end of `frontend/src/pages/chat/Chat.tsx`. Citations assembled from Azure AI Search include `content`, `title`, `filepath`, and, when configured, `url`. You can customize the Citation section to use and display these as you like. For example, the title element is a clickable hyperlink if `url` is not a blob URL.
 
 ```
     <h5 

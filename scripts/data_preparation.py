@@ -454,7 +454,7 @@ if __name__ == "__main__":
     parser.add_argument("--form-rec-key", type=str, help="Key for your Form Recognizer resource to use for PDF cracking.")
     parser.add_argument("--form-rec-use-layout", default=True, action='store_true', help="Whether to use Layout model for PDF cracking, if False will use Read model.")
     parser.add_argument("--njobs", type=valid_range, default=4, help="Number of jobs to run (between 1 and 32). Default=4")
-    parser.add_argument("--embedding-model-endpoint", type=str, help="Endpoint for the embedding model to use for vector search. Format: 'https://<AOAI resource name>.openai.azure.us/openai/deployments/<Ada deployment name>/embeddings?api-version=2024-03-01-Preview'")
+    parser.add_argument("--embedding-model-endpoint", type=str, help="Endpoint for the embedding model to use for vector search. Format: 'https://<AOAI resource name>.openai.azure.us/openai/deployments/<embedding deployment name>/embeddings?api-version=2024-03-01-Preview'")
     parser.add_argument("--embedding-model-key", type=str, help="Key for the embedding model to use for vector search.")
     parser.add_argument("--search-admin-key", type=str, help="Admin key for the search service. If not provided, will use Azure CLI to get the key.")
     parser.add_argument("--azure-openai-endpoint", type=str, help="Endpoint for the (Azure) OpenAI API. Format: 'https://<AOAI resource name>.openai.azure.us/openai/deployments/<vision model name>/chat/completions?api-version=2024-04-01-preview'")

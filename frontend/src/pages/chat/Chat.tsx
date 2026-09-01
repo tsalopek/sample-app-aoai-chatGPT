@@ -712,7 +712,7 @@ const Chat = () => {
 
   const onViewSource = (citation: Citation) => {
     if (citation.url && !citation.url.includes('blob.core')) {
-      window.open(citation.url, '_blank')
+      window.open(citation.url, '_blank', 'noopener,noreferrer')
     }
   }
 

@@ -119,9 +119,9 @@ if url_prefix:
 ## Optional: Add vector embeddings
 Azure Cognitive Search supports vector search in public preview. See [the docs](https://learn.microsoft.com/en-us/azure/search/vector-search-overview) for more information.
 
-To add vectors to your index, you will first need an [Azure OpenAI resource](https://learn.microsoft.com/en-us/azure/ai-services/openai/overview) with an [Ada embedding model deployment](https://learn.microsoft.com/en-us/azure/ai-services/openai/concepts/models#embeddings-models). The `text-embedding-ada-002` model is supported.
+To add vectors to your index, you will first need an [Azure OpenAI resource](https://learn.microsoft.com/en-us/azure/ai-services/openai/overview) with an [embedding model deployment](https://learn.microsoft.com/en-us/azure/ai-services/openai/concepts/models#embeddings-models). The Azure Government infrastructure defaults to `text-embedding-3-small`.
 
-- Get the endpoint for embedding model deployment. The endpoint will generally be of the format `https://<azure openai resource name>.openai.azure.us/openai/deployments/<ada deployment name>/embeddings?api-version=2023-06-01-preview`.
+- Get the endpoint for the embedding model deployment. The endpoint will generally be of the format `https://<azure openai resource name>.openai.azure.us/openai/deployments/<embedding deployment name>/embeddings?api-version=2023-06-01-preview`.
 - Run the data preparation script, passing in your config file and the embedding endpoint and key as extra arguments:
 
       `python data_preparation.py --config config.json --embedding-model-endpoint "<embedding endpoint>"`
@@ -156,7 +156,7 @@ If your documents have a lot of tables and relevant layout information, you can 
 - Azure Machine Learning (AML) Workspace with associated Keyvault
 - Azure Cognitive Search (ACS) resource
 - (Optional if processing PDF) [Azure AI Document Intelligence](https://learn.microsoft.com/en-us/azure/ai-services/document-intelligence/overview?view=doc-intel-3.1.0) resource
-- (Optional if adding embeddings for vector search) Azure OpenAI resource with Ada (text-embedding-ada-002) deployment
+- (Optional if adding embeddings for vector search) Azure OpenAI resource with an embedding model deployment such as `text-embedding-3-small`
 - (Optional) Azure Blob Storage account
 
 ## Configure
@@ -170,7 +170,7 @@ If your documents have a lot of tables and relevant layout information, you can 
         "document_intelligence_secret_name": "myDocIntelligenceKey",
         "document_intelligence_endpoint": "https://<document intelligence resource name>.cognitiveservices.azure.us/",
         "embedding_key_secret_name": "myAzureOpenAIKey",
-        "embedding_endpoint": "https:/<azure openai resource name>.openai.azure.us/openai/deployments/<Ada deployment name>/embeddings?api-version=2023-06-01-preview",
+        "embedding_endpoint": "https://<azure openai resource name>.openai.azure.us/openai/deployments/<embedding deployment name>/embeddings?api-version=2023-06-01-preview",
         "index_name": "<new index name>",
         "search_service_name": "<search service name>",
         "search_key_secret_name": "mySearchServiceKey"
