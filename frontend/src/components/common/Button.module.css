@@ -23,7 +23,7 @@
 }
 
 .historyButtonRoot {
-  width: 180px;
+  width: 220px;
   border: 1px solid #d1d1d1;
 }
 
@@ -35,6 +35,16 @@
   border: 1px solid #d1d1d1;
 }
 
+.preferencesButtonRoot {
+  width: 225px;
+  border: 1px solid #d1d1d1;
+}
+
+.preferencesButtonRoot:hover,
+.preferencesButtonRoot:active {
+  border: 1px solid #d1d1d1;
+}
+
 @media (max-width: 480px) {
   .shareButtonRoot {
     width: auto;
@@ -42,6 +52,11 @@
   }
 
   .historyButtonRoot {
+    width: auto;
+    padding: 0 8px;
+  }
+
+  .preferencesButtonRoot {
     width: auto;
     padding: 0 8px;
   }
