@@ -186,3 +186,33 @@ async def test_retrieve_from_azure_search_creates_vector_with_embedding_deployme
             "k": 50,
         }
     ]
+
+
+@pytest.mark.asyncio
+async def test_retrieve_from_azure_search_explains_forbidden_managed_identity_access():
+    http_client = httpx.AsyncClient(
+        transport=httpx.MockTransport(lambda _request: httpx.Response(403))
+    )
+    search_settings = make_search_settings(query_type="simple")
+    search_settings.index = "index"
+    search_settings.endpoint = "https://search-service.search.azure.us"
+    search_settings.api_version = "2024-07-01"
+    search_settings.key = None
+    search_settings.permitted_groups_column = None
+
+    class Credential:
+        async def get_token(self, _scope):
+            return SimpleNamespace(token="token")
+
+    try:
+        with pytest.raises(PermissionError, match="Search Index Data Reader"):
+            await retrieve_from_azure_search(
+                query="question",
+                search_settings=search_settings,
+                request_headers={},
+                openai_client=SimpleNamespace(),
+                azure_credential=Credential(),
+                http_client=http_client,
+            )
+    finally:
+        await http_client.aclose()

@@ -32,11 +32,15 @@
 }
 
 .buildNumber {
-  margin-left: 8px;
+  position: fixed;
+  right: 12px;
+  bottom: 8px;
+  z-index: 1;
   color: #616161;
   font-family: Consolas, 'Courier New', monospace;
   font-size: 11px;
   line-height: 16px;
+  pointer-events: none;
   white-space: nowrap;
 }
 

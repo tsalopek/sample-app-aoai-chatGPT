@@ -280,6 +280,24 @@ async def retrieve_from_azure_search(
             f"?api-version={search_settings.api_version}"
         )
         response = await http_client.post(url, headers=headers, json=payload)
+        if response.status_code == 403:
+            if search_settings.key:
+                authentication_guidance = (
+                    "The configured AZURE_SEARCH_KEY was rejected. Verify that it is "
+                    "an active query key and that key-based authentication is enabled."
+                )
+            else:
+                authentication_guidance = (
+                    "GPT-5.1 application-managed RAG queries Search as the App "
+                    "Service managed identity. Enable role-based access control on the "
+                    "Search service and grant that identity Search Index Data Reader."
+                )
+            raise PermissionError(
+                "Azure AI Search denied the search request (403). "
+                f"{authentication_guidance} If that access is already correct, verify "
+                "that the Search service firewall or private endpoint permits the App "
+                "Service network path."
+            )
         response.raise_for_status()
         documents = response.json().get("value", [])
         logging.debug("Azure AI Search returned %s documents", len(documents))

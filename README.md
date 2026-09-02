@@ -144,6 +144,8 @@ The document-preparation identity needs the broader `Search Service Contributor`
 
 Note: RBAC assignments can take a few minutes before becoming effective.
 
+> **GPT-5.1 migration note:** Azure AI Search retrieval is application-managed in this version. The **App Service managed identity** now calls your index directly; earlier Azure OpenAI On Your Data deployments called it as the Azure OpenAI resource identity. Assigning `Search Index Data Reader` to the prior Azure OpenAI identity does not grant the App Service access. If your Search service has a firewall or private endpoint, it must also allow the App Service's network path.
+
 ## App Configuration
 
 ### App Settings
