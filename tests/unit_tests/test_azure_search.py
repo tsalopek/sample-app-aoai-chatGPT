@@ -76,6 +76,17 @@ def test_format_retrieved_documents_builds_grounding_and_citations():
     assert result.citations[0]["content"] == "The plan covers preventive care."
 
 
+def test_format_retrieved_documents_omits_citation_labels_when_disabled():
+    result = _format_retrieved_documents(
+        make_search_settings(),
+        [{"content": "The plan covers preventive care.", "title": "Health plan"}],
+        include_citations=False,
+    )
+
+    assert "[doc1]" not in result.context
+    assert "Do not include source references" in result.context
+
+
 @pytest.mark.asyncio
 async def test_retrieve_from_azure_search_uses_government_endpoint_and_key():
     request = None

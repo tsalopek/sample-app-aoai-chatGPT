@@ -5,7 +5,7 @@ import { CopyRegular } from '@fluentui/react-icons'
 
 import { CosmosDBStatus } from '../../api'
 import Andworx from '../../assets/andworx.svg'
-import { HistoryButton, ShareButton } from '../../components/common/Button'
+import { HistoryButton, PreferencesButton, ShareButton } from '../../components/common/Button'
 import { AppStateContext } from '../../state/AppProvider'
 
 import styles from './Layout.module.css'
@@ -15,8 +15,8 @@ const Layout = () => {
   const [copyClicked, setCopyClicked] = useState<boolean>(false)
   const [copyText, setCopyText] = useState<string>('Copy URL')
   const [shareLabel, setShareLabel] = useState<string | undefined>('Share')
-  const [hideHistoryLabel, setHideHistoryLabel] = useState<string>('Hide chat history')
-  const [showHistoryLabel, setShowHistoryLabel] = useState<string>('Show chat history')
+  const [hideHistoryLabel, setHideHistoryLabel] = useState<string>('Hide Chat History')
+  const [showHistoryLabel, setShowHistoryLabel] = useState<string>('Show Chat History')
   const [logo, setLogo] = useState('')
   const appStateContext = useContext(AppStateContext)
   const ui = appStateContext?.state.frontendSettings?.ui
@@ -40,6 +40,10 @@ const Layout = () => {
     appStateContext?.dispatch({ type: 'TOGGLE_CHAT_HISTORY' })
   }
 
+  const handlePreferencesClick = () => {
+    window.dispatchEvent(new Event('open-chat-preferences'))
+  }
+
   useEffect(() => {
     if (!appStateContext?.state.isLoading) {
       setLogo(ui?.logo || Andworx)
@@ -58,12 +62,12 @@ const Layout = () => {
     const handleResize = () => {
       if (window.innerWidth < 480) {
         setShareLabel(undefined)
-        setHideHistoryLabel('Hide history')
-        setShowHistoryLabel('Show history')
+        setHideHistoryLabel('Hide Chat History')
+        setShowHistoryLabel('Show Chat History')
       } else {
         setShareLabel('Share')
-        setHideHistoryLabel('Hide chat history')
-        setShowHistoryLabel('Show chat history')
+        setHideHistoryLabel('Hide Chat History')
+        setShowHistoryLabel('Show Chat History')
       }
     }
 
@@ -84,6 +88,12 @@ const Layout = () => {
             </Link>
           </Stack>
           <Stack horizontal tokens={{ childrenGap: 4 }} className={styles.shareButtonContainer}>
+            {appStateContext?.state.isCosmosDBAvailable?.status === CosmosDBStatus.Working && (
+              <PreferencesButton
+                text="Chat Preferences"
+                onClick={handlePreferencesClick}
+              />
+            )}
             {appStateContext?.state.isCosmosDBAvailable?.status !== CosmosDBStatus.NotConfigured && ui?.show_chat_history_button !== false && (
               <HistoryButton
                 onClick={handleHistoryClick}

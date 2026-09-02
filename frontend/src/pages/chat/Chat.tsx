@@ -126,6 +126,12 @@ const Chat = () => {
   }, [appStateContext?.state.isCosmosDBAvailable?.cosmosDB])
 
   useEffect(() => {
+    const openPreferences = () => setIsSettingsOpen(true)
+    window.addEventListener('open-chat-preferences', openPreferences)
+    return () => window.removeEventListener('open-chat-preferences', openPreferences)
+  }, [])
+
+  useEffect(() => {
     if (!preferencesLoaded) return
     if (skipNextPreferenceSave.current) {
       skipNextPreferenceSave.current = false
@@ -914,15 +920,6 @@ const Chat = () => {
                 </Stack>
               )}
               <Stack>
-                <CommandBarButton
-                  role="button"
-                  className={styles.settingsIcon}
-                  iconProps={{ iconName: 'Settings' }}
-                  onClick={() => setIsSettingsOpen(true)}
-                  disabled={isLoading || !appStateContext?.state.isCosmosDBAvailable?.cosmosDB}
-                  aria-label="Open chat preferences"
-                  title="Chat preferences"
-                />
                 {appStateContext?.state.isCosmosDBAvailable?.status !== CosmosDBStatus.NotConfigured && (
                   <CommandBarButton
                     role="button"
@@ -984,7 +981,7 @@ const Chat = () => {
                 <Dialog
                   hidden={!isSettingsOpen}
                   onDismiss={() => setIsSettingsOpen(false)}
-                  dialogContentProps={{ title: 'Chat preferences', subText: preferencesSaving ? 'Saving preferences…' : 'Changes save automatically and apply to future messages.' }}
+                  dialogContentProps={{ title: 'Chat Preferences', subText: preferencesSaving ? 'Saving preferences…' : 'Changes save automatically and apply to future messages.' }}
                   modalProps={{ styles: { main: { maxWidth: 460 } } }}>
                   <Stack tokens={{ childrenGap: 16 }}>
                     <Dropdown label="Response length" selectedKey={userSettings.response_length}
@@ -1001,7 +998,7 @@ const Chat = () => {
                     <Toggle label="Show citations" checked={userSettings.show_citations}
                       onChange={(_, checked) => setUserSettings({ ...userSettings, show_citations: Boolean(checked) })} />
                     <Stack horizontal horizontalAlign="end" tokens={{ childrenGap: 8 }}>
-                      <DefaultButton text="Cancel" onClick={() => setIsSettingsOpen(false)} />
+                      <DefaultButton text="Close" onClick={() => setIsSettingsOpen(false)} />
                     </Stack>
                   </Stack>
                 </Dialog>

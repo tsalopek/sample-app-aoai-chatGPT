@@ -120,7 +120,10 @@ async def test_send_chat_request_retrieves_before_gpt_5_1_call(monkeypatch):
     async def fake_init_openai_client():
         return fake_client
 
-    async def fake_retrieve(**_kwargs):
+    retrieval_args = {}
+
+    async def fake_retrieve(**kwargs):
+        retrieval_args.update(kwargs)
         return RetrievalResult(
             context="[doc1] Retrieved coverage",
             citations=[{"id": "1", "content": "Retrieved coverage"}],
@@ -146,3 +149,4 @@ async def test_send_chat_request_retrieves_before_gpt_5_1_call(monkeypatch):
     assert citations == [{"id": "1", "content": "Retrieved coverage"}]
     assert "[doc1] Retrieved coverage" in captured["messages"][0]["content"]
     assert "data_sources" not in captured.get("extra_body", {})
+    assert retrieval_args["include_citations"] is True

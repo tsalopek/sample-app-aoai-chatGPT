@@ -419,6 +419,7 @@ async def send_chat_request(request_body, request_headers):
                 openai_client=azure_openai_client,
                 azure_credential=get_azure_credential(),
                 top_k=preferences["retrieved_documents"],
+                include_citations=preferences["show_citations"],
             )
 
         model_args = prepare_model_args(
