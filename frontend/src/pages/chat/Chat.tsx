@@ -1004,18 +1004,18 @@ const Chat = () => {
                   dialogContentProps={{ title: 'Chat Preferences', subText: preferencesSaving ? 'Saving preferences…' : 'Changes save automatically and apply to future messages.' }}
                   modalProps={{ styles: { main: { maxWidth: 460 } } }}>
                   <Stack tokens={{ childrenGap: 16 }}>
-                    <Dropdown label="Response length" selectedKey={userSettings.response_length}
+                    <Dropdown label="Response Length" selectedKey={userSettings.response_length}
                       options={[256, 512, 1000, 2000, 4000, 8000, 16000, 32000].map(value => ({ key: value, text: `${value.toLocaleString()} tokens` }))}
                       onChange={(_, option) => option && setUserSettings({ ...userSettings, response_length: option.key as UserSettings['response_length'] })} />
-                    <Dropdown label="Reasoning effort" selectedKey={userSettings.reasoning_effort}
+                    <Dropdown label="Reasoning Effort" selectedKey={userSettings.reasoning_effort}
                       options={['none', 'low', 'medium', 'high'].map(value => ({ key: value, text: value[0].toUpperCase() + value.slice(1) }))}
                       onChange={(_, option) => option && setUserSettings({ ...userSettings, reasoning_effort: option.key as UserSettings['reasoning_effort'] })} />
-                    <Toggle label="Ground answers in Azure AI Search" checked={userSettings.data_grounding}
+                    <Toggle label="Ground Answers in Azure AI Search" checked={userSettings.data_grounding}
                       onChange={(_, checked) => setUserSettings({ ...userSettings, data_grounding: Boolean(checked) })} />
-                    <Slider label={`Retrieved documents: ${userSettings.retrieved_documents}`} min={1} max={10} step={1}
+                    <Slider label={`Retrieved Documents: ${userSettings.retrieved_documents}`} min={1} max={10} step={1}
                       value={userSettings.retrieved_documents} disabled={!userSettings.data_grounding} showValue={false}
                       onChange={value => setUserSettings({ ...userSettings, retrieved_documents: value })} />
-                    <Toggle label="Show citations" checked={userSettings.show_citations}
+                    <Toggle label="Show Citations" checked={userSettings.show_citations}
                       onChange={(_, checked) => setUserSettings({ ...userSettings, show_citations: Boolean(checked) })} />
                     <Stack horizontal horizontalAlign="end" tokens={{ childrenGap: 8 }}>
                       <DefaultButton text="Close" onClick={() => setIsSettingsOpen(false)} />
