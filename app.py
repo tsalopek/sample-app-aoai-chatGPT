@@ -142,15 +142,17 @@ def normalize_user_settings(value):
     return settings
 
 
-async def record_usage(request_headers, usage):
-    if not current_app.cosmos_conversation_client or not usage:
+async def record_usage(cosmos_client, user_id, usage):
+    if not cosmos_client or not usage:
         return
-    user_id = get_authenticated_user_details(request_headers=request_headers)["user_principal_id"]
-    await current_app.cosmos_conversation_client.create_usage_record(user_id, {
-        "promptTokens": getattr(usage, "prompt_tokens", 0) or 0,
-        "completionTokens": getattr(usage, "completion_tokens", 0) or 0,
-        "totalTokens": getattr(usage, "total_tokens", 0) or 0,
-    })
+    try:
+        await cosmos_client.create_usage_record(user_id, {
+            "promptTokens": getattr(usage, "prompt_tokens", 0) or 0,
+            "completionTokens": getattr(usage, "completion_tokens", 0) or 0,
+            "totalTokens": getattr(usage, "total_tokens", 0) or 0,
+        })
+    except Exception:
+        logging.exception("Unable to record token usage")
 
 
 # Enable Microsoft Defender for Cloud Integration
@@ -469,7 +471,12 @@ async def complete_chat_request(request_body, request_headers):
             request_body,
             request_headers,
         )
-        await record_usage(request_headers, response.usage)
+        cosmos_client = current_app.cosmos_conversation_client
+        user_id = (
+            get_authenticated_user_details(request_headers=request_headers)["user_principal_id"]
+            if cosmos_client else None
+        )
+        await record_usage(cosmos_client, user_id, response.usage)
         history_metadata = request_body.get("history_metadata", {})
         return format_non_streaming_response(
             response,
@@ -480,6 +487,11 @@ async def complete_chat_request(request_body, request_headers):
 
 
 async def stream_chat_request(request_body, request_headers):
+    cosmos_client = current_app.cosmos_conversation_client
+    user_id = (
+        get_authenticated_user_details(request_headers=request_headers)["user_principal_id"]
+        if cosmos_client else None
+    )
     response, apim_request_id, citations = await send_chat_request(
         request_body,
         request_headers,
@@ -500,7 +512,7 @@ async def stream_chat_request(request_body, request_headers):
                 )
                 citations_sent = True
             yield format_stream_response(completionChunk, history_metadata, apim_request_id)
-        await record_usage(request_headers, final_usage)
+        await record_usage(cosmos_client, user_id, final_usage)
 
     return generate()
 
