@@ -86,6 +86,22 @@ class CosmosConversationClient():
         }
         return await self.container_client.upsert_item(document)
 
+    async def create_usage_record(self, user_id, usage):
+        return await self.container_client.upsert_item({
+            'id': str(uuid.uuid4()),
+            'type': 'usage',
+            'userId': user_id,
+            'createdAt': datetime.utcnow().isoformat(),
+            **usage,
+        })
+
+    async def get_usage_total(self, user_id):
+        query = "SELECT VALUE SUM(c.totalTokens) FROM c WHERE c.userId = @userId AND c.type = 'usage'"
+        parameters = [{'name': '@userId', 'value': user_id}]
+        async for item in self.container_client.query_items(query=query, parameters=parameters):
+            return item or 0
+        return 0
+
     async def delete_conversation(self, user_id, conversation_id):
         conversation = await self.container_client.read_item(item=conversation_id, partition_key=user_id)        
         if conversation:

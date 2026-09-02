@@ -5,6 +5,16 @@
   gap: 20px;
 }
 
+.tokenUsage {
+  position: fixed;
+  left: 12px;
+  bottom: 8px;
+  z-index: 1;
+  color: #616161;
+  font-size: 11px;
+  line-height: 16px;
+}
+
 .chatRoot {
   flex: 1;
   display: flex;

@@ -97,6 +97,10 @@ export type UserSettings = {
   show_citations: boolean
 }
 
+export type UserUsage = {
+  all_time_tokens: number
+}
+
 export type UserInfo = {
   access_token: string
   expires_on: string

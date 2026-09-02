@@ -35,6 +35,7 @@ import {
   UserSettings,
   getUserSettings,
   saveUserSettings,
+  getUserUsage,
 } from "../../api";
 import { Answer } from "../../components/Answer";
 import { QuestionInput } from "../../components/QuestionInput";
@@ -81,6 +82,8 @@ const Chat = () => {
   const [preferencesLoaded, setPreferencesLoaded] = useState(false)
   const [preferencesSaving, setPreferencesSaving] = useState(false)
   const skipNextPreferenceSave = useRef(true)
+  const [allTimeTokens, setAllTimeTokens] = useState(0)
+  const sessionStartingTokens = useRef(0)
 
   const errorDialogContentProps = {
     type: DialogType.close,
@@ -124,6 +127,23 @@ const Chat = () => {
       })
     }
   }, [appStateContext?.state.isCosmosDBAvailable?.cosmosDB])
+
+  useEffect(() => {
+    if (appStateContext?.state.isCosmosDBAvailable?.cosmosDB) {
+      getUserUsage().then(usage => {
+        if (usage) {
+          sessionStartingTokens.current = usage.all_time_tokens
+          setAllTimeTokens(usage.all_time_tokens)
+        }
+      })
+    }
+  }, [appStateContext?.state.isCosmosDBAvailable?.cosmosDB])
+
+  useEffect(() => {
+    if (processMessages === messageStatus.Done && appStateContext?.state.isCosmosDBAvailable?.cosmosDB) {
+      getUserUsage().then(usage => usage && setAllTimeTokens(usage.all_time_tokens))
+    }
+  }, [processMessages])
 
   useEffect(() => {
     const openPreferences = () => setIsSettingsOpen(true)
@@ -1109,9 +1129,14 @@ const Chat = () => {
               </Stack>
             </Stack.Item>
           )}
-          {appStateContext?.state.isChatHistoryOpen &&
+      {appStateContext?.state.isChatHistoryOpen &&
             appStateContext?.state.isCosmosDBAvailable?.status !== CosmosDBStatus.NotConfigured && <ChatHistoryPanel />}
         </Stack>
+      )}
+      {appStateContext?.state.isCosmosDBAvailable?.cosmosDB && (
+        <span className={styles.tokenUsage}>
+          Tokens — session: {(allTimeTokens - sessionStartingTokens.current).toLocaleString()} | all time: {allTimeTokens.toLocaleString()}
+        </span>
       )}
     </div>
   )

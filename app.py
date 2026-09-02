@@ -142,6 +142,17 @@ def normalize_user_settings(value):
     return settings
 
 
+async def record_usage(request_headers, usage):
+    if not current_app.cosmos_conversation_client or not usage:
+        return
+    user_id = get_authenticated_user_details(request_headers=request_headers)["user_principal_id"]
+    await current_app.cosmos_conversation_client.create_usage_record(user_id, {
+        "promptTokens": getattr(usage, "prompt_tokens", 0) or 0,
+        "completionTokens": getattr(usage, "completion_tokens", 0) or 0,
+        "totalTokens": getattr(usage, "total_tokens", 0) or 0,
+    })
+
+
 # Enable Microsoft Defender for Cloud Integration
 MS_DEFENDER_ENABLED = os.environ.get("MS_DEFENDER_ENABLED", "true").lower() == "true"
 
@@ -315,6 +326,8 @@ def prepare_model_args(request_body, request_headers, grounding_context=None, us
         "user": user_json,
         **generation_args,
     }
+    if model_args["stream"]:
+        model_args["stream_options"] = {"include_usage": True}
 
     extra_body = {}
     # openai 1.55.3 supports max_completion_tokens but predates the typed
@@ -456,6 +469,7 @@ async def complete_chat_request(request_body, request_headers):
             request_body,
             request_headers,
         )
+        await record_usage(request_headers, response.usage)
         history_metadata = request_body.get("history_metadata", {})
         return format_non_streaming_response(
             response,
@@ -474,7 +488,9 @@ async def stream_chat_request(request_body, request_headers):
     
     async def generate():
         citations_sent = False
+        final_usage = None
         async for completionChunk in response:
+            final_usage = getattr(completionChunk, "usage", None) or final_usage
             if citations is not None and not citations_sent:
                 yield format_retrieval_response(
                     completionChunk,
@@ -484,6 +500,7 @@ async def stream_chat_request(request_body, request_headers):
                 )
                 citations_sent = True
             yield format_stream_response(completionChunk, history_metadata, apim_request_id)
+        await record_usage(request_headers, final_usage)
 
     return generate()
 
@@ -551,6 +568,16 @@ async def user_settings():
     except Exception as error:
         logging.exception("Exception in /user/settings")
         return jsonify({"error": str(error)}), 500
+
+
+@bp.route("/user/usage", methods=["GET"])
+async def user_usage():
+    await cosmos_db_ready.wait()
+    if not current_app.cosmos_conversation_client:
+        return jsonify({"error": "CosmosDB is required to retrieve usage."}), 503
+    user_id = get_authenticated_user_details(request_headers=request.headers)["user_principal_id"]
+    total = await current_app.cosmos_conversation_client.get_usage_total(user_id)
+    return jsonify({"all_time_tokens": total}), 200
 
 
 ## Conversation History API ##
