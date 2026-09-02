@@ -116,6 +116,31 @@ frontend_settings = {
     "oyd_enabled": app_settings.base_settings.datasource_type,
 }
 
+USER_SETTINGS_DEFAULTS = {
+    "response_length": 4000,
+    "reasoning_effort": "none",
+    "data_grounding": True,
+    "retrieved_documents": 3,
+    "show_citations": True,
+}
+USER_SETTINGS_RESPONSE_LENGTHS = {256, 512, 1000, 2000, 4000, 8000, 16000, 32000}
+USER_SETTINGS_REASONING_EFFORTS = {"none", "low", "medium", "high"}
+
+
+def normalize_user_settings(value):
+    settings = {**USER_SETTINGS_DEFAULTS, **(value or {})}
+    if settings["response_length"] not in USER_SETTINGS_RESPONSE_LENGTHS:
+        raise ValueError(
+            "response_length must be one of 256, 512, 1000, 2000, 4000, 8000, 16000, or 32000."
+        )
+    if settings["reasoning_effort"] not in USER_SETTINGS_REASONING_EFFORTS:
+        raise ValueError("reasoning_effort must be none, low, medium, or high.")
+    if not isinstance(settings["data_grounding"], bool) or not isinstance(settings["show_citations"], bool):
+        raise ValueError("data_grounding and show_citations must be boolean values.")
+    if not isinstance(settings["retrieved_documents"], int) or not 1 <= settings["retrieved_documents"] <= 10:
+        raise ValueError("retrieved_documents must be between 1 and 10.")
+    return settings
+
 
 # Enable Microsoft Defender for Cloud Integration
 MS_DEFENDER_ENABLED = os.environ.get("MS_DEFENDER_ENABLED", "true").lower() == "true"
@@ -222,7 +247,7 @@ async def init_cosmosdb_client():
     return cosmos_conversation_client
 
 
-def prepare_model_args(request_body, request_headers, grounding_context=None):
+def prepare_model_args(request_body, request_headers, grounding_context=None, user_settings=None):
     request_messages = request_body.get("messages", [])
     messages = []
     uses_direct_azure_search = (
@@ -275,7 +300,12 @@ def prepare_model_args(request_body, request_headers, grounding_context=None):
         application_name = app_settings.ui.title
         user_json = get_msdefender_user_json(authenticated_user_details, request_headers, conversation_id, application_name)
 
-    generation_args = app_settings.azure_openai.get_chat_completion_parameters()
+    preferences = normalize_user_settings(user_settings or request_body.get("user_settings"))
+    generation_args = app_settings.azure_openai.get_chat_completion_parameters(
+        max_tokens=preferences["response_length"]
+    )
+    if app_settings.azure_openai.is_reasoning_model:
+        generation_args["reasoning_effort"] = preferences["reasoning_effort"]
     reasoning_effort = generation_args.pop("reasoning_effort", None)
 
     model_args = {
@@ -377,13 +407,18 @@ async def send_chat_request(request_body, request_headers):
     try:
         azure_openai_client = await init_openai_client()
         retrieval_result = None
-        if app_settings.base_settings.datasource_type == "AzureCognitiveSearch":
+        preferences = normalize_user_settings(request_body.get("user_settings"))
+        if (
+            app_settings.base_settings.datasource_type == "AzureCognitiveSearch"
+            and preferences["data_grounding"]
+        ):
             retrieval_result = await retrieve_from_azure_search(
                 query=get_latest_user_query(filtered_messages),
                 search_settings=app_settings.datasource,
                 request_headers=request_headers,
                 openai_client=azure_openai_client,
                 azure_credential=get_azure_credential(),
+                top_k=preferences["retrieved_documents"],
             )
 
         model_args = prepare_model_args(
@@ -392,6 +427,7 @@ async def send_chat_request(request_body, request_headers):
             grounding_context=(
                 retrieval_result.context if retrieval_result else None
             ),
+            user_settings=preferences,
         )
         raw_response = await azure_openai_client.chat.completions.with_raw_response.create(**model_args)
         response = raw_response.parse()
@@ -487,6 +523,33 @@ def get_frontend_settings():
     except Exception as e:
         logging.exception("Exception in /frontend_settings")
         return jsonify({"error": str(e)}), 500
+
+
+@bp.route("/user/settings", methods=["GET", "PUT"])
+async def user_settings():
+    await cosmos_db_ready.wait()
+    if not current_app.cosmos_conversation_client:
+        return jsonify({"error": "CosmosDB is required to save user settings."}), 503
+
+    authenticated_user = get_authenticated_user_details(request_headers=request.headers)
+    user_id = authenticated_user["user_principal_id"]
+
+    try:
+        if request.method == "GET":
+            document = await current_app.cosmos_conversation_client.get_user_settings(user_id)
+            return jsonify(normalize_user_settings(document.get("settings") if document else None)), 200
+
+        if not request.is_json:
+            return jsonify({"error": "request must be json"}), 415
+        request_json = await request.get_json()
+        settings = normalize_user_settings(request_json)
+        await current_app.cosmos_conversation_client.upsert_user_settings(user_id, settings)
+        return jsonify(settings), 200
+    except ValueError as error:
+        return jsonify({"error": str(error)}), 400
+    except Exception as error:
+        logging.exception("Exception in /user/settings")
+        return jsonify({"error": str(error)}), 500
 
 
 ## Conversation History API ##

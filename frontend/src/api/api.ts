@@ -1,6 +1,6 @@
 import { chatHistorySampleData } from '../constants/chatHistory'
 
-import { ChatMessage, Conversation, ConversationRequest, CosmosDBHealth, CosmosDBStatus, UserInfo } from './models'
+import { ChatMessage, Conversation, ConversationRequest, CosmosDBHealth, CosmosDBStatus, UserInfo, UserSettings } from './models'
 
 export async function conversationApi(options: ConversationRequest, abortSignal: AbortSignal): Promise<Response> {
   const response = await fetch('/conversation', {
@@ -8,9 +8,7 @@ export async function conversationApi(options: ConversationRequest, abortSignal:
     headers: {
       'Content-Type': 'application/json'
     },
-    body: JSON.stringify({
-      messages: options.messages
-    }),
+    body: JSON.stringify(options),
     signal: abortSignal
   })
 
@@ -121,11 +119,13 @@ export const historyGenerate = async (
   if (convId) {
     body = JSON.stringify({
       conversation_id: convId,
-      messages: options.messages
+      messages: options.messages,
+      user_settings: options.user_settings
     })
   } else {
     body = JSON.stringify({
-      messages: options.messages
+      messages: options.messages,
+      user_settings: options.user_settings
     })
   }
   const response = await fetch('/history/generate', {
@@ -327,6 +327,18 @@ export const frontendSettings = async (): Promise<Response | null> => {
 
   return response
 }
+
+export const getUserSettings = async (): Promise<UserSettings | null> => {
+  const response = await fetch('/user/settings')
+  return response.ok ? response.json() : null
+}
+
+export const saveUserSettings = async (settings: UserSettings): Promise<Response> =>
+  fetch('/user/settings', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(settings)
+  })
 export const historyMessageFeedback = async (messageId: string, feedback: string): Promise<Response> => {
   const response = await fetch('/history/message_feedback', {
     method: 'POST',

@@ -20,11 +20,41 @@ def test_prepare_model_args_uses_gpt_5_1_contract():
         {},
     )
 
-    assert model_args["max_completion_tokens"] == 1000
+    assert model_args["max_completion_tokens"] == 4000
     assert model_args["extra_body"] == {"reasoning_effort": "none"}
     assert "max_tokens" not in model_args
     assert "temperature" not in model_args
     assert "top_p" not in model_args
+
+
+def test_prepare_model_args_applies_validated_user_preferences():
+    model_args = app_module.prepare_model_args(
+        {
+            "messages": [{"role": "user", "content": "hello"}],
+            "user_settings": {
+                "response_length": 2000,
+                "reasoning_effort": "medium",
+                "data_grounding": False,
+                "retrieved_documents": 3,
+                "show_citations": False,
+            },
+        },
+        {},
+    )
+
+    assert model_args["max_completion_tokens"] == 2000
+    assert model_args["extra_body"] == {"reasoning_effort": "medium"}
+
+
+def test_normalize_user_settings_rejects_invalid_document_count():
+    with pytest.raises(ValueError, match="retrieved_documents"):
+        app_module.normalize_user_settings({"retrieved_documents": 11})
+
+
+def test_normalize_user_settings_allows_extended_response_length():
+    settings = app_module.normalize_user_settings({"response_length": 32000})
+
+    assert settings["response_length"] == 32000
 
 
 def test_prepare_model_args_preserves_legacy_contract(monkeypatch):
@@ -39,7 +69,7 @@ def test_prepare_model_args_preserves_legacy_contract(monkeypatch):
         {},
     )
 
-    assert model_args["max_tokens"] == 1000
+    assert model_args["max_tokens"] == 4000
     assert model_args["temperature"] == 0
     assert model_args["top_p"] == 1.0
     assert "max_completion_tokens" not in model_args

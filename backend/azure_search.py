@@ -34,6 +34,7 @@ def build_search_payload(
     query: str,
     query_vector=None,
     filter_expression: Optional[str] = None,
+    top_k: Optional[int] = None,
 ) -> dict:
     """Build an Azure AI Search Documents request for the configured query type."""
     query_type = search_settings.query_type
@@ -54,8 +55,9 @@ def build_search_payload(
         ]
     )
 
+    effective_top_k = top_k if top_k is not None else search_settings.top_k
     payload = {
-        "top": search_settings.top_k,
+        "top": effective_top_k,
         "select": ",".join(select_fields),
     }
 
@@ -83,9 +85,9 @@ def build_search_payload(
                 "vector": query_vector,
                 "fields": ",".join(search_settings.vector_columns),
                 "k": (
-                    max(50, search_settings.top_k)
+                    max(50, effective_top_k)
                     if uses_semantic
-                    else search_settings.top_k
+                    else effective_top_k
                 ),
             }
         ]
@@ -230,6 +232,7 @@ async def retrieve_from_azure_search(
     openai_client: AsyncAzureOpenAI,
     azure_credential: Optional[DefaultAzureCredential] = None,
     http_client: Optional[httpx.AsyncClient] = None,
+    top_k: Optional[int] = None,
 ) -> RetrievalResult:
     """Retrieve grounding documents and format them for GPT-5.1 and the UI."""
     filter_expression = None
@@ -261,6 +264,7 @@ async def retrieve_from_azure_search(
             query,
             query_vector,
             filter_expression,
+            top_k,
         )
         headers = {"Content-Type": "application/json"}
         if search_settings.key:

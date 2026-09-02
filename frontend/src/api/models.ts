@@ -86,6 +86,15 @@ export type ChatResponse = {
 
 export type ConversationRequest = {
   messages: ChatMessage[]
+  user_settings?: UserSettings
+}
+
+export type UserSettings = {
+  response_length: 256 | 512 | 1000 | 2000 | 4000 | 8000 | 16000 | 32000
+  reasoning_effort: 'none' | 'low' | 'medium' | 'high'
+  data_grounding: boolean
+  retrieved_documents: number
+  show_citations: boolean
 }
 
 export type UserInfo = {

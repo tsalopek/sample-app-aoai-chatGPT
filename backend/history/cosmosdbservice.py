@@ -68,6 +68,24 @@ class CosmosConversationClient():
         else:
             return False
 
+    async def get_user_settings(self, user_id):
+        try:
+            return await self.container_client.read_item(
+                item=f"user-settings-{user_id}", partition_key=user_id
+            )
+        except exceptions.CosmosResourceNotFoundError:
+            return None
+
+    async def upsert_user_settings(self, user_id, settings):
+        document = {
+            'id': f"user-settings-{user_id}",
+            'type': 'user_settings',
+            'userId': user_id,
+            'updatedAt': datetime.utcnow().isoformat(),
+            'settings': settings,
+        }
+        return await self.container_client.upsert_item(document)
+
     async def delete_conversation(self, user_id, conversation_id):
         conversation = await self.container_client.read_item(item=conversation_id, partition_key=user_id)        
         if conversation:
@@ -180,4 +198,3 @@ class CosmosConversationClient():
             messages.append(item)
 
         return messages
-

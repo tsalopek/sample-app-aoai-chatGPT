@@ -1,5 +1,5 @@
 import { useRef, useState, useEffect, useContext, useLayoutEffect } from 'react'
-import { CommandBarButton, IconButton, Dialog, DialogType, Stack } from '@fluentui/react'
+import { CommandBarButton, IconButton, Dialog, DialogType, Stack, Dropdown, Slider, Toggle, DefaultButton } from '@fluentui/react'
 import { SquareRegular, ShieldLockRegular, ErrorCircleRegular } from '@fluentui/react-icons'
 
 import ReactMarkdown from 'react-markdown'
@@ -12,7 +12,7 @@ import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter'
 import { nord } from 'react-syntax-highlighter/dist/esm/styles/prism'
 
 import styles from './Chat.module.css'
-import Contoso from '../../assets/Contoso.svg'
+import Andworx from '../../assets/andworx.svg'
 import { XSSAllowTags } from '../../constants/sanatizeAllowables'
 
 import {
@@ -32,6 +32,9 @@ import {
   CosmosDBStatus,
   ErrorMessage,
   ExecResults,
+  UserSettings,
+  getUserSettings,
+  saveUserSettings,
 } from "../../api";
 import { Answer } from "../../components/Answer";
 import { QuestionInput } from "../../components/QuestionInput";
@@ -43,6 +46,14 @@ const enum messageStatus {
   NotRunning = 'Not Running',
   Processing = 'Processing',
   Done = 'Done'
+}
+
+const defaultUserSettings: UserSettings = {
+  response_length: 4000,
+  reasoning_effort: 'none',
+  data_grounding: true,
+  retrieved_documents: 3,
+  show_citations: true
 }
 
 const Chat = () => {
@@ -65,6 +76,11 @@ const Chat = () => {
   const [errorMsg, setErrorMsg] = useState<ErrorMessage | null>()
   const [logo, setLogo] = useState('')
   const [answerId, setAnswerId] = useState<string>('')
+  const [userSettings, setUserSettings] = useState<UserSettings>(defaultUserSettings)
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false)
+  const [preferencesLoaded, setPreferencesLoaded] = useState(false)
+  const [preferencesSaving, setPreferencesSaving] = useState(false)
+  const skipNextPreferenceSave = useRef(true)
 
   const errorDialogContentProps = {
     type: DialogType.close,
@@ -99,6 +115,34 @@ const Chat = () => {
     }
   }, [appStateContext?.state.isCosmosDBAvailable])
 
+  useEffect(() => {
+    if (appStateContext?.state.isCosmosDBAvailable?.cosmosDB) {
+      getUserSettings().then(settings => {
+        if (settings) setUserSettings(settings)
+        skipNextPreferenceSave.current = true
+        setPreferencesLoaded(true)
+      })
+    }
+  }, [appStateContext?.state.isCosmosDBAvailable?.cosmosDB])
+
+  useEffect(() => {
+    if (!preferencesLoaded) return
+    if (skipNextPreferenceSave.current) {
+      skipNextPreferenceSave.current = false
+      return
+    }
+    setPreferencesSaving(true)
+    const saveTimer = window.setTimeout(async () => {
+      const response = await saveUserSettings(userSettings)
+      setPreferencesSaving(false)
+      if (!response.ok) {
+        setErrorMsg({ title: 'Unable to save preferences', subtitle: 'Your preferences could not be saved. Please try again.' })
+        if (hideErrorDialog) toggleErrorDialog()
+      }
+    }, 300)
+    return () => window.clearTimeout(saveTimer)
+  }, [userSettings, preferencesLoaded])
+
   const handleErrorDialogClose = () => {
     toggleErrorDialog()
     setTimeout(() => {
@@ -108,7 +152,7 @@ const Chat = () => {
 
   useEffect(() => {
     if (!appStateContext?.state.isLoading) {
-      setLogo(ui?.chat_logo || ui?.logo || Contoso)
+      setLogo(ui?.chat_logo || ui?.logo || Andworx)
     }
   }, [appStateContext?.state.isLoading])
 
@@ -220,7 +264,8 @@ const Chat = () => {
     setMessages(conversation.messages)
 
     const request: ConversationRequest = {
-      messages: [...conversation.messages.filter(answer => answer.role !== ERROR)]
+      messages: [...conversation.messages.filter(answer => answer.role !== ERROR)],
+      user_settings: userSettings
     }
 
     let result = {} as ChatResponse
@@ -334,12 +379,14 @@ const Chat = () => {
       } else {
         conversation.messages.push(userMessage)
         request = {
-          messages: [...conversation.messages.filter(answer => answer.role !== ERROR)]
+          messages: [...conversation.messages.filter(answer => answer.role !== ERROR)],
+          user_settings: userSettings
         }
       }
     } else {
       request = {
-        messages: [userMessage].filter(answer => answer.role !== ERROR)
+        messages: [userMessage].filter(answer => answer.role !== ERROR),
+        user_settings: userSettings
       }
       setMessages(request.messages)
     }
@@ -810,13 +857,13 @@ const Chat = () => {
                         {typeof answer.content === "string" && <Answer
                           answer={{
                             answer: answer.content,
-                            citations: parseCitationFromMessage(messages[index - 1]),
+                            citations: userSettings.show_citations ? parseCitationFromMessage(messages[index - 1]) : [],
                             generated_chart: parsePlotFromMessage(messages[index - 1]),
                             message_id: answer.id,
                             feedback: answer.feedback,
                             exec_results: execResults
                           }}
-                          onCitationClicked={c => onShowCitation(c)}
+                          onCitationClicked={c => userSettings.show_citations && onShowCitation(c)}
                           onExectResultClicked={() => onShowExecResult(answerId)}
                         />}
                       </div>
@@ -867,6 +914,15 @@ const Chat = () => {
                 </Stack>
               )}
               <Stack>
+                <CommandBarButton
+                  role="button"
+                  className={styles.settingsIcon}
+                  iconProps={{ iconName: 'Settings' }}
+                  onClick={() => setIsSettingsOpen(true)}
+                  disabled={isLoading || !appStateContext?.state.isCosmosDBAvailable?.cosmosDB}
+                  aria-label="Open chat preferences"
+                  title="Chat preferences"
+                />
                 {appStateContext?.state.isCosmosDBAvailable?.status !== CosmosDBStatus.NotConfigured && (
                   <CommandBarButton
                     role="button"
@@ -926,6 +982,30 @@ const Chat = () => {
                   aria-label="clear chat button"
                 />
                 <Dialog
+                  hidden={!isSettingsOpen}
+                  onDismiss={() => setIsSettingsOpen(false)}
+                  dialogContentProps={{ title: 'Chat preferences', subText: preferencesSaving ? 'Saving preferences…' : 'Changes save automatically and apply to future messages.' }}
+                  modalProps={{ styles: { main: { maxWidth: 460 } } }}>
+                  <Stack tokens={{ childrenGap: 16 }}>
+                    <Dropdown label="Response length" selectedKey={userSettings.response_length}
+                      options={[256, 512, 1000, 2000, 4000, 8000, 16000, 32000].map(value => ({ key: value, text: `${value.toLocaleString()} tokens` }))}
+                      onChange={(_, option) => option && setUserSettings({ ...userSettings, response_length: option.key as UserSettings['response_length'] })} />
+                    <Dropdown label="Reasoning effort" selectedKey={userSettings.reasoning_effort}
+                      options={['none', 'low', 'medium', 'high'].map(value => ({ key: value, text: value[0].toUpperCase() + value.slice(1) }))}
+                      onChange={(_, option) => option && setUserSettings({ ...userSettings, reasoning_effort: option.key as UserSettings['reasoning_effort'] })} />
+                    <Toggle label="Ground answers in Azure AI Search" checked={userSettings.data_grounding}
+                      onChange={(_, checked) => setUserSettings({ ...userSettings, data_grounding: Boolean(checked) })} />
+                    <Slider label={`Retrieved documents: ${userSettings.retrieved_documents}`} min={1} max={10} step={1}
+                      value={userSettings.retrieved_documents} disabled={!userSettings.data_grounding} showValue={false}
+                      onChange={value => setUserSettings({ ...userSettings, retrieved_documents: value })} />
+                    <Toggle label="Show citations" checked={userSettings.show_citations}
+                      onChange={(_, checked) => setUserSettings({ ...userSettings, show_citations: Boolean(checked) })} />
+                    <Stack horizontal horizontalAlign="end" tokens={{ childrenGap: 8 }}>
+                      <DefaultButton text="Cancel" onClick={() => setIsSettingsOpen(false)} />
+                    </Stack>
+                  </Stack>
+                </Dialog>
+                <Dialog
                   hidden={hideErrorDialog}
                   onDismiss={handleErrorDialogClose}
                   dialogContentProps={errorDialogContentProps}
@@ -947,7 +1027,7 @@ const Chat = () => {
             </Stack>
           </div>
           {/* Citation Panel */}
-          {messages && messages.length > 0 && isCitationPanelOpen && activeCitation && (
+          {userSettings.show_citations && messages && messages.length > 0 && isCitationPanelOpen && activeCitation && (
             <Stack.Item className={styles.citationPanel} tabIndex={0} role="tabpanel" aria-label="Citations Panel">
               <Stack
                 aria-label="Citations Panel Header Container"
